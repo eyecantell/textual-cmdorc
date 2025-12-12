@@ -1,0 +1,131 @@
+[project]
+name = "textual-cmdorc"
+version = "0.1.0"
+description = "Clickable file links for Textual applications."
+readme = "README.md"
+authors = [
+    {name = "eyecantell", email = "paul@pneuma.solutions"},
+]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Terminals",
+    "Topic :: Software Development :: User Interfaces",
+]
+
+keywords = [
+    "textual",
+    "tui",
+    "terminal",
+    "file",
+    "link",
+    "widget",
+    "clickable",
+    "developer-tools",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=6.6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/eyecantell/textual-cmdorc"
+Repository = "https://github.com/eyecantell/textual-cmdorc"
+Issues = "https://github.com/eyecantell/textual-cmdorc/issues"
+Documentation = "https://github.com/eyecantell/textual-cmdorc#readme"
+Changelog = "https://github.com/eyecantell/textual-cmdorc/releases"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
+package-dir = "src"
+
+[tool.pdm.dev-dependencies]
+test = [
+    "pytest>=7.4.4",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+]
+lint = [
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+dev = [
+    "textual-dev>=1.0.0",  # Useful for live development
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # Line length handled by ruff formatter
+    "B008", # Do not perform function calls in argument defaults (common in Textual)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["T20"]  # Allow print statements in tests
+
+[tool.pytest.ini_options]
+addopts = [
+    "--cov=src/textual_cmdorc",  # Fixed: underscore not hyphen
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "-v",
+]
+asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
+python_files = "test_*.py"
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["src/textual_cmdorc"]
+omit = ["*/tests/*", "*/__pycache__/*", "*/demo*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstract",
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+ignore_missing_imports = true
