@@ -223,7 +223,9 @@ class _DebouncedHandler(FileSystemEventHandler):
         self._tasks: dict[str, asyncio.Task] = {}
 
     def _schedule(self, event: FileSystemEvent):
-        key = self.trigger  # Changed to per-watcher debounce
+        # Use trigger name as key - debounces across all files for this watcher
+        # E.g., changing 3 .py files rapidly → only one "py_file_changed" trigger
+        key = self.trigger
         if key in self._tasks:
             self._tasks[key].cancel()
         self._tasks[key] = asyncio.create_task(self._delayed_trigger())
@@ -345,7 +347,7 @@ def create_command_link(
 
 Rationale: Wires tooltips with trigger context from TriggerContext.
 
-### Step 5: Main App Implementation (6-10 hours)
+### Step 6: Main App Implementation (6-10 hours)
 - In `app.py`: Integrate all, with watcher start/stop. Use Tree for hierarchy.
 ```python
 # src/textual_cmdorc/app.py
