@@ -73,6 +73,8 @@ addopts = "--cov=src/textual_cmdorc --cov-report=term-missing --cov-fail-under=9
 ```python
 # src/textual_cmdorc/utils.py
 import logging
+from dataclasses import dataclass
+from cmdorc import RunResult
 
 def setup_logging(level: int = logging.INFO) -> None:
     logging.basicConfig(level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -83,6 +85,13 @@ def map_run_state_to_icon(state: 'RunState') -> str:
     if state == 'FAILED': return "❌"
     if state == 'CANCELLED': return "⏹"
     return "❓"  # Pending/Idle
+
+@dataclass
+class PresentationUpdate:
+    icon: str
+    running: bool
+    tooltip: str
+    output_path: Path | None = None
 ```
 - Test: `pdm run python -m textual_cmdorc` (expect error if incomplete). Run `pdm run ruff check .` for linting.
 
@@ -199,9 +208,10 @@ class FileWatcherConfig:
     debounce_ms: int = 300
 
 class _DebouncedHandler(FileSystemEventHandler):
-    def __init__(self, trigger: str, orchestrator: CommandOrchestrator, debounce_ms: int = 300):
+    def __init__(self, trigger: str, orchestrator: CommandOrchestrator, loop: asyncio.AbstractEventLoop, debounce_ms: int = 300):
         self.trigger = trigger
         self.orchestrator = orchestrator
+        self.loop = loop
         self.debounce_ms = debounce_ms
         self._tasks: dict[str, asyncio.Task] = {}
 
@@ -222,11 +232,12 @@ class _DebouncedHandler(FileSystemEventHandler):
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
             return
-        self._schedule(event)
+        self.loop.call_soon_threadsafe(lambda: self._schedule(event))
 
 class FileWatcherManager:
-    def __init__(self, orchestrator: CommandOrchestrator):
+    def __init__(self, orchestrator: CommandOrchestrator, loop: asyncio.AbstractEventLoop):
         self.orchestrator = orchestrator
+        self.loop = loop
         self.observer = Observer()
         self.handlers: List[_DebouncedHandler] = []
 
@@ -234,7 +245,7 @@ class FileWatcherManager:
         if not config.dir.exists():
             logger.warning(f"Watcher directory does not exist: {config.dir}")
             return
-        handler = _DebouncedHandler(config.trigger, self.orchestrator, config.debounce_ms)
+        handler = _DebouncedHandler(config.trigger, self.orchestrator, self.loop, config.debounce_ms)
         self.observer.schedule(handler, str(config.dir.resolve()), recursive=True)
         self.handlers.append(handler)
         logger.info(f"Started watcher on {config.dir} → '{config.trigger}'")
@@ -250,7 +261,7 @@ class FileWatcherManager:
             task.cancel()
         logger.info("File watcher manager stopped")
 ```
-- Test: `test_file_watcher.py` – Mock observer, simulate events, assert trigger called after debounce.
+- Test: `test_file_watcher.py` – Mock observer/loop, simulate events, assert trigger called after debounce.
 
 Rationale: Debounced, cross-platform triggering; only interacts via orchestrator.trigger().
 
@@ -260,6 +271,7 @@ Rationale: Debounced, cross-platform triggering; only interacts via orchestrator
 # src/textual_cmdorc/widgets.py
 from textual_filelink import CommandLink
 from cmdorc import CommandConfig, RunResult
+from .utils import PresentationUpdate, TriggerSource
 
 class CmdorcCommandLink(CommandLink):
     def __init__(self, config: CommandConfig, **kwargs):
@@ -274,22 +286,26 @@ class CmdorcCommandLink(CommandLink):
             **kwargs
         )
         self.config = config
-        self.current_trigger: str = "Idle"
+        self.current_trigger: TriggerSource = TriggerSource("Idle", "manual")
         self._update_tooltips()
 
-    def update_from_run_result(self, result: RunResult, trigger_source: str = "manual") -> None:
+    def apply_update(self, update: PresentationUpdate) -> None:
+        self.set_status(icon=update.icon, running=update.running, tooltip=update.tooltip)
+        if update.output_path:
+            self.set_output_path(update.output_path)
+
+    def update_from_run_result(self, result: RunResult, trigger_source: TriggerSource) -> None:
         from .utils import map_run_state_to_icon
         icon = map_run_state_to_icon(result.state.value)
         tooltip = f"{result.state.value} ({result.duration_str})"
-        self.set_status(icon=icon, running=(result.state == 'RUNNING'), tooltip=tooltip)
-        if result.state in ['SUCCESS', 'FAILED', 'CANCELLED']:
-            self.set_output_path(result.output)  # Latest output as path
+        update = PresentationUpdate(icon=icon, running=(result.state == 'RUNNING'), tooltip=tooltip, output_path=result.output if result.state in ['SUCCESS', 'FAILED', 'CANCELLED'] else None)
+        self.apply_update(update)
         self.current_trigger = trigger_source
         self._update_tooltips()
 
     def _update_tooltips(self) -> None:
         if self.is_running:
-            self.set_stop_tooltip(f"Stop — Running because: {self.current_trigger}")
+            self.set_stop_tooltip(f"Stop — Running because: {self.current_trigger.name} ({self.current_trigger.kind})")
         else:
             triggers = ", ".join(self.config.triggers) or "none"
             self.set_play_tooltip(f"Run (Triggers: {triggers} | manual)")
@@ -304,7 +320,7 @@ Rationale: Adds dynamic tooltips with triggers; handles output path.
 # src/textual_cmdorc/integrator.py
 from typing import Callable
 from cmdorc import CommandOrchestrator, RunHandle, RunResult, RunState
-from .widgets import CmdorcCommandLink
+from .widgets import CmdorcCommandLink, TriggerSource
 import logging
 
 def create_command_link(
@@ -315,7 +331,9 @@ def create_command_link(
     link = CmdorcCommandLink(node.config)
     
     def update_from_result(result: RunResult, context=None):
-        trigger_source = context.get('trigger', 'manual') if context else 'manual'
+        source_name = context.get('trigger', 'manual') if context else 'manual'
+        kind = "lifecycle" if "command_" in source_name else ("file" if "file" in source_name else "manual")
+        trigger_source = TriggerSource(source_name, kind)
         link.update_from_run_result(result, trigger_source)
         if on_status_change:
             on_status_change(result.state, result)
@@ -363,7 +381,9 @@ class CmdorcApp(App):
         self.config_path_str = config_path
         self.runner_config, self.watcher_configs, self.hierarchy = load_runner_and_watchers(self.config_path_str)
         self.orchestrator = CommandOrchestrator(self.runner_config)
-        self.watcher_manager = FileWatcherManager(self.orchestrator)
+        self.loop = asyncio.get_event_loop()
+        self.watcher_manager = FileWatcherManager(self.orchestrator, self.loop)
+        self.link_registry: dict[str, list[CmdorcCommandLink]] = {}  # For broadcasting to duplicates
     
     async def on_mount(self) -> None:
         for wc in self.watcher_configs:
@@ -385,15 +405,18 @@ class CmdorcApp(App):
         for node in nodes:
             link = create_command_link(node, self.orchestrator, self.on_global_status_change)
             link.id = f"cmd-{node.config.name.replace(' ', '-')}"
+            if node.config.name in self.link_registry:
+                link.label = f"{link.label} (duplicate)"  # UX affordance
+            self.link_registry.setdefault(node.config.name, []).append(link)
             tree_node = tree.add(link, parent=parent)  # CommandLink as label
             self.build_command_tree(tree, node.children, parent=tree_node)
     
     def on_global_status_change(self, state: RunState, result: RunResult):
-        self.log_pane.write_line(f"{result.command_name}: {state.value} ({result.duration_str})\n{result.output[:100]}...")
+        self.post_message(LogEvent(f"{result.command_name}: {state.value} ({result.duration_str})\n{result.output[:100]}..."))
     
     async def on_input_submitted(self, message: Input.Submitted):
         await self.orchestrator.trigger(message.value)
-        self.log_pane.write_line(f"Triggered: {message.value}")
+        self.post_message(LogEvent(f"Triggered: {message.value}"))
     
     def on_command_link_play_clicked(self, event: CommandLink.PlayClicked):
         self.run_worker(self._run_command(event.name))
@@ -408,12 +431,21 @@ class CmdorcApp(App):
     def key_r(self):
         self.runner_config, self.watcher_configs, self.hierarchy = load_runner_and_watchers(self.config_path_str)
         self.command_tree.clear()
+        self.link_registry = {}
         self.build_command_tree(self.command_tree, self.hierarchy)
     
     async def action_quit(self) -> None:
         self.watcher_manager.stop()
         await self.orchestrator.shutdown()
         await super().action_quit()
+    
+    # New for structured logs
+    class LogEvent(Message):
+        def __init__(self, text: str):
+            self.text = text
+    
+    def on_log_event(self, event: LogEvent):
+        self.log_pane.write_line(event.text)
 ```
 - Test: `test_app.py` – Mount app, simulate file changes/triggers/clicks, assert logs/UI updates (use Tree methods like expand/collapse in tests).
 
