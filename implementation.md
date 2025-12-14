@@ -2,10 +2,10 @@
 # Development Plan for textual-cmdorc
 
 ## Overview
-textual-cmdorc is a Textual-based Terminal User Interface (TUI) that acts as a frontend for the cmdorc library. It loads a TOML configuration file (e.g., config.toml), parses the commands and their lifecycle triggers (specifically "command_success:<name>", "command_failed:<name>", and "command_cancelled:<name>"), and dynamically generates a hierarchical list of CommandLink widgets (from textual-filelink). The hierarchy indents child commands under parents based on these triggers, duplicating commands in the tree if they have multiple parents (treating the structure as a DAG with duplication to form trees).
+textual-cmdorc is a Textual-based Terminal User Interface (TUI) that acts as a frontend for the cmdorc library. It loads a TOML configuration file (e.g., config.toml), parses the commands and their lifecycle triggers (specifically "command_success:<name>", "command_failed:<name>", and "command_cancelled:<name>"), and dynamically generates a hierarchical tree of CommandLink widgets (from textual-filelink) using Textual's Tree widget. The hierarchy indents child commands under parents based on these triggers, duplicating commands in the tree if they have multiple parents (treating the structure as a DAG with duplication to form trees).
 
 The TUI will:
-- Display commands in an indented hierarchy (e.g., Lint → Format → Tests, with "Another Command" as a root).
+- Display commands in an indented hierarchy (e.g., Lint → Format → Tests, with "Another Command" as a root) using Tree for better interactivity and collapsibility.
 - Use CommandLink widgets for each command, showing status (e.g., spinner for running, icons for success/failed/cancelled).
 - Update statuses in real-time via cmdorc's lifecycle callbacks.
 - Allow manual run/stop via CommandLink's play/stop buttons.
@@ -22,7 +22,7 @@ This plan is for a junior developer: Step-by-step, with code snippets, testing, 
 - Read:
   - cmdorc: README.md and architecture.md.
   - textual-filelink: README.md (focus on CommandLink API: constructor, set_status, set_output_path, events like PlayClicked).
-  - Textual docs: https://textual.textualize.io/ (widgets: Vertical, Log, Input; events; workers for async).
+  - Textual docs: https://textual.textualize.io/ (widgets: Tree, Log, Input; events; workers for async).
   - Watchdog docs: https://python-watchdog.readthedocs.io/ (focus on PollingObserver for cross-platform).
 
 ### Project Structure
@@ -340,12 +340,11 @@ def create_command_link(
 Rationale: Wires tooltips with trigger context from TriggerContext.
 
 ### Step 6: Main App Implementation (6-10 hours)
-- In `app.py`: Integrate all, with watcher start/stop.
+- In `app.py`: Integrate all, with watcher start/stop. Use Tree for hierarchy.
 ```python
 # src/textual_cmdorc/app.py
 from textual.app import App, ComposeResult
-from textual.containers import Vertical
-from textual.widgets import Log, Input, Footer, Static
+from textual.widgets import Tree, Log, Input, Footer
 from textual.reactive import reactive
 from cmdorc import CommandOrchestrator, RunState
 from .config_parser import load_runner_and_watchers, CommandNode
@@ -372,23 +371,22 @@ class CmdorcApp(App):
         self.watcher_manager.start()
 
     def compose(self) -> ComposeResult:
-        self.command_list = Vertical(id="command-list")
-        self.build_command_tree(self.command_list, self.hierarchy)
+        self.command_tree = Tree("Commands")
+        self.build_command_tree(self.command_tree, self.hierarchy)
         
-        yield self.command_list
+        yield self.command_tree
         self.log_pane = Log(id="log")
         yield self.log_pane
         self.trigger_input = Input(placeholder="Enter trigger (e.g., py_file_changed)")
         yield self.trigger_input
         yield Footer()
     
-    def build_command_tree(self, container: Vertical, nodes: list[CommandNode], level: int = 0):
+    def build_command_tree(self, tree: Tree, nodes: list[CommandNode], parent=None):
         for node in nodes:
-            indent = "  " * level
             link = create_command_link(node, self.orchestrator, self.on_global_status_change)
             link.id = f"cmd-{node.config.name.replace(' ', '-')}"
-            container.mount(Static(f"{indent}- {link}", markup=False))
-            self.build_command_tree(container, node.children, level + 1)
+            tree_node = tree.add(link, parent=parent)  # CommandLink as label
+            self.build_command_tree(tree, node.children, parent=tree_node)
     
     def on_global_status_change(self, state: RunState, result: RunResult):
         self.log_pane.write_line(f"{result.command_name}: {state.value} ({result.duration_str})\n{result.output[:100]}...")
@@ -409,17 +407,17 @@ class CmdorcApp(App):
     
     def key_r(self):
         self.runner_config, self.watcher_configs, self.hierarchy = load_runner_and_watchers(self.config_path_str)
-        self.command_list.remove_children()
-        self.build_command_tree(self.command_list, self.hierarchy)
+        self.command_tree.clear()
+        self.build_command_tree(self.command_tree, self.hierarchy)
     
     async def action_quit(self) -> None:
         self.watcher_manager.stop()
         await self.orchestrator.shutdown()
         await super().action_quit()
 ```
-- Test: `test_app.py` – Mount app, simulate file changes/triggers/clicks, assert logs/UI updates.
+- Test: `test_app.py` – Mount app, simulate file changes/triggers/clicks, assert logs/UI updates (use Tree methods like expand/collapse in tests).
 
-Rationale: Integrates watchers; reload for dynamic configs.
+Rationale: Uses Tree for proper hierarchy, interactivity, and future collapsibility. Integrates watchers; reload for dynamic configs.
 
 ### Step 7: Tests & Coverage Enforcement (5-8 hours)
 - Achieve ≥90% coverage: Unit for pure logic, integration for app.
