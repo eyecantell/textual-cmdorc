@@ -74,16 +74,23 @@ addopts = "--cov=src/textual_cmdorc --cov-report=term-missing --cov-fail-under=9
 # src/textual_cmdorc/utils.py
 import logging
 from dataclasses import dataclass
+from typing import Literal
+from pathlib import Path
 from cmdorc import RunResult
 
 def setup_logging(level: int = logging.INFO) -> None:
     logging.basicConfig(level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
+@dataclass
+class TriggerSource:
+    name: str
+    kind: Literal["manual", "file", "lifecycle"]
+
 def map_run_state_to_icon(state: 'RunState') -> str:
     # Map cmdorc.RunState to CommandLink icons (defaults from README)
-    if state == 'SUCCESS': return "✅"
-    if state == 'FAILED': return "❌"
-    if state == 'CANCELLED': return "⏹"
+    if state == RunState.SUCCESS: return "✅"
+    if state == RunState.FAILED: return "❌"
+    if state == RunState.CANCELLED: return "⏹"
     return "❓"  # Pending/Idle
 
 @dataclass
@@ -268,55 +275,6 @@ class FileWatcherManager:
 
 Rationale: Debounced, cross-platform triggering; only interacts via orchestrator.trigger().
 
-### Step 4: Widget Integration (3-5 hours)
-- In `widgets.py`: Subclass CommandLink for cmdorc-specific logic.
-```python
-# src/textual_cmdorc/widgets.py
-from textual_filelink import CommandLink
-from cmdorc import CommandConfig, RunResult
-from .utils import PresentationUpdate, TriggerSource
-
-class CmdorcCommandLink(CommandLink):
-    def __init__(self, config: CommandConfig, **kwargs):
-        super().__init__(
-            label=config.name,
-            output_path=None,  # Set later
-            initial_status_icon="❓",
-            initial_status_tooltip="Idle",
-            show_toggle=False,
-            show_settings=False,
-            show_remove=False,
-            **kwargs
-        )
-        self.config = config
-        self.current_trigger: TriggerSource = TriggerSource("Idle", "manual")
-        self._update_tooltips()
-
-    def apply_update(self, update: PresentationUpdate) -> None:
-        self.set_status(icon=update.icon, running=update.running, tooltip=update.tooltip)
-        if update.output_path:
-            self.set_output_path(update.output_path)
-
-    def update_from_run_result(self, result: RunResult, trigger_source: TriggerSource) -> None:
-        from .utils import map_run_state_to_icon
-        icon = map_run_state_to_icon(result.state.value)
-        tooltip = f"{result.state.value} ({result.duration_str})"
-        update = PresentationUpdate(icon=icon, running=(result.state == 'RUNNING'), tooltip=tooltip, output_path=result.output if result.state in ['SUCCESS', 'FAILED', 'CANCELLED'] else None)
-        self.apply_update(update)
-        self.current_trigger = trigger_source
-        self._update_tooltips()
-
-    def _update_tooltips(self) -> None:
-        if self.is_running:
-            self.set_stop_tooltip(f"Stop — Running because: {self.current_trigger.name} ({self.current_trigger.kind})")
-        else:
-            triggers = ", ".join(self.config.triggers) or "none"
-            self.set_play_tooltip(f"Run (Triggers: {triggers} | manual)")
-```
-- Test: `test_widgets.py` – Create link, call update_from_run_result, assert tooltips/status set.
-
-Rationale: Adds dynamic tooltips with triggers; handles output path.
-
 ### Step 5: Integrator Implementation (2-4 hours)
 - In `integrator.py`: Factory to wire callbacks, capturing trigger source.
 ```python
@@ -324,6 +282,7 @@ Rationale: Adds dynamic tooltips with triggers; handles output path.
 from typing import Callable
 from cmdorc import CommandOrchestrator, RunHandle, RunResult, RunState
 from .widgets import CmdorcCommandLink, TriggerSource
+from .config_parser import CommandNode
 import logging
 
 class StateReconciler:
@@ -331,14 +290,22 @@ class StateReconciler:
         self.orchestrator = orchestrator
     
     def reconcile_link(self, link: CmdorcCommandLink) -> None:
-        status = self.orchestrator.get_status(link.config.name)
+        """Sync link state with current cmdorc state. Idempotent."""
         active_handles = self.orchestrator.get_active_handles(link.config.name)
+        
         if active_handles:
             handle = active_handles[-1]
-            link.set_status(running=True, tooltip=f"Running: {handle.comment}")
             if handle.is_finalized and hasattr(handle, '_result'):
-                pass
+                # Handle finished but not cleaned up yet
+                result = handle._result
+                trigger_source = TriggerSource("recovered", "lifecycle")
+                link.update_from_run_result(result, trigger_source)
+            else:
+                # Still running
+                comment = getattr(handle, 'comment', 'Running')
+                link.set_status(running=True, tooltip=f"Running: {comment}")
         else:
+            # No active runs - check history for last state
             history = self.orchestrator.get_history(link.config.name, limit=1)
             if history:
                 result = history[0]
@@ -378,11 +345,12 @@ def create_command_link(
 
 Rationale: Wires tooltips with trigger context from TriggerContext.
 
-### Step 6: Main App Implementation (6-10 hours)
+### Step 5: Main App Implementation (6-10 hours)
 - In `app.py`: Integrate all, with watcher start/stop. Use Tree for hierarchy.
 ```python
 # src/textual_cmdorc/app.py
 from textual.app import App, ComposeResult
+from textual.message import Message
 from textual.widgets import Tree, Log, Input, Footer
 from textual.reactive import reactive
 from cmdorc import CommandOrchestrator, RunState
@@ -461,11 +429,26 @@ class CmdorcApp(App):
     def on_command_link_stop_clicked(self, event: CommandLink.StopClicked):
         self.run_worker(self.orchestrator.cancel_command(event.name, comment="Manual stop"))
     
-    def key_r(self):
+    async def action_reload_config(self):
+        """Reload configuration from disk."""
         self.runner_config, self.watcher_configs, self.hierarchy = load_runner_and_watchers(self.config_path_str)
         self.command_tree.clear()
         self.link_registry = {}
         self.build_command_tree(self.command_tree, self.hierarchy)
+        self.notify("Configuration reloaded", severity="information")
+    
+    async def action_cancel_all(self):
+        """Cancel all running commands."""
+        await self.orchestrator.cancel_all()
+        self.notify("All commands cancelled", severity="warning")
+
+    def action_toggle_log(self):
+        """Toggle log pane visibility."""
+        self.log_pane.display = not self.log_pane.display
+
+    def action_show_help(self):
+        """Show help screen."""
+        self.notify("Help: r=reload, Ctrl+C=cancel all, Ctrl+P=toggle log, ?=help", timeout=5)
     
     async def action_quit(self) -> None:
         self.watcher_manager.stop()

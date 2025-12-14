@@ -63,7 +63,7 @@ Only one public class is exposed: `CmdorcApp`.
 | **CmdorcApp**                | Textual lifecycle, layout, global hotkeys, log pane                  | Command execution, file watching logic        |
 | **ConfigParser**             | Load TOML → `RunnerConfig` + `list[FileWatcherConfig]` + hierarchy  | UI rendering                                  |
 | **FileWatcherManager**       | Starts/stops `watchdog` observers, debounced `orchestrator.trigger()`| UI, command state                             |
-| **Integrator**               | Creates `CmdorcCommandLink`, wires cmdorc lifecycle callbacks, normalizes trigger context, converts to PresentationUpdate | File watching, config parsing                 |
+| **Integrator**               | Creates `CmdorcCommandLink`, wires cmdorc lifecycle callbacks        | File watching, config parsing                 |
 | **CmdorcCommandLink**        | Subclass of `CommandLink`; adds `current_trigger`, dynamic tooltips | Execution logic                               |
 
 ---
@@ -244,5 +244,7 @@ CI will fail if total coverage < 90%. Add contract tests: Mock cmdorc → assert
 - textual-cmdorc never infers command state. It only reflects state transitions reported by cmdorc.
 - Cycles are detected and broken arbitrarily; commands involved in cycles may not appear in all branches.
 - StateReconciler is idempotent, read-only, and never triggers execution.
+- StateReconciler runs once on mount after tree is built. It does not poll or run continuously.
+- Reconciliation handles the case where cmdorc has state (running commands, history) but the TUI just started and hasn't received lifecycle callbacks yet.
 
 ---
