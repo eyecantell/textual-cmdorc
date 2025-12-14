@@ -12,7 +12,7 @@ This is the single source of truth for `textual-cmdorc`’s architecture, respon
 |----------------------------------|-----------------------------------------------------------------------------------------------------|
 | **cmdorc is the only source of truth** | All state, execution, triggers, and history live in `CommandOrchestrator`. The TUI is purely a viewer/controller. |
 | **Zero hidden mutations**        | All UI updates are driven by explicit callbacks from `cmdorc` (lifecycle + `on_event`). No polling. |
-| **Separation of concerns**       | - Config → `config_parser.py`<br>- Hierarchy → `config_parser.py`<br>- File watching → `file_watcher.py`<br>- Widget wiring → `integrator.py`<br>- UI → `app.py` |
+| **Separation of concerns**       | - Config → `cmdorc_frontend/config.py`<br>- Hierarchy → `cmdorc_frontend/config.py`<br>- File watching → `textual_cmdorc/file_watcher.py` (concrete) + `cmdorc_frontend/watchers.py` (abstract)<br>- Widget wiring → `textual_cmdorc/integrator.py`<br>- UI → `textual_cmdorc/app.py` |
 | **Testability first**            | Every non-UI component is pure or mockable. UI tested with Textual’s testing utilities. ≥90% coverage enforced. |
 | **Graceful degradation**         | If `[[file_watcher]]` missing → no watchers started. If `CommandLink` missing features → fall back to defaults or log warnings. |
 | **Extensibility**                | New trigger sources (HTTP, Git hooks, etc.) only need to call `orchestrator.trigger()`. |
