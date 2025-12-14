@@ -103,7 +103,7 @@ sequenceDiagram
     User->>CmdorcCommandLink: PlayClicked / StopClicked
     CmdorcCommandLink->>CmdorcApp: on_command_link_play/stop_clicked()
     CmdorcApp->>CommandOrchestrator: run_command(name)  or  cancel_command(name)
-    Note right of CmdorcApp: run_command is fire-and-forget; status updates arrive via callbacks
+    Note right of CmdorcApp: run_command is fire-and-for-get; status updates arrive via callbacks
 ```
 
 ### 4.4 Tooltip Logic (Dynamic)

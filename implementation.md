@@ -80,7 +80,7 @@ addopts = "--cov=src/textual_cmdorc --cov-report=term-missing --cov-fail-under=9
 from dataclasses import dataclass
 from typing import Literal, List
 from pathlib import Path
-from cmdorc import RunResult
+from cmdorc import RunResult, RunState, CommandConfig
 
 @dataclass
 class TriggerSource:
@@ -96,14 +96,29 @@ class PresentationUpdate:
 
 @dataclass
 class CommandNode:
-    name: str
-    triggers: list[str]
+    config: CommandConfig  # ✅ Store full config
     children: list['CommandNode'] = None  # type: ignore
 
     def __post_init__(self):
-        self.children = []
+        if self.children is None:
+            self.children = []
+    
+    @property
+    def name(self) -> str:
+        return self.config.name
+    
+    @property
+    def triggers(self) -> list[str]:
+        return self.config.triggers
 ```
-- In `cmdorc_frontend/utils.py`: Logging and mappers (if needed; keep minimal).
+- In `textual_cmdorc/utils.py`: TUI-specific utils.
+```python
+# src/textual_cmdorc/utils.py
+import logging
+
+def setup_logging(level: int = logging.INFO) -> None:
+    logging.basicConfig(level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+```
 - Test: `pdm run python -m textual_cmdorc` (expect error if incomplete). Run `pdm run ruff check .` for linting.
 
 Rationale: Sets up PDM, shared models for reuse.
@@ -116,11 +131,12 @@ from typing import Dict, List, Tuple
 from pathlib import Path
 import re
 import tomllib  # or tomli for <3.11
-from cmdorc import load_config, CommandConfig, RunnerConfig
+from cmdorc import load_config as load_cmdorc_config, RunnerConfig, CommandConfig
 from .models import CommandNode
 from .watchers import WatcherConfig
 
-def load_config(path: str | Path) -> Tuple[RunnerConfig, List[WatcherConfig], List[CommandNode]]:
+def load_frontend_config(path: str | Path) -> Tuple[RunnerConfig, List[WatcherConfig], List[CommandNode]]:
+    """Load configuration for any frontend."""
     path = Path(path)
     raw = tomllib.loads(path.read_text())
     
@@ -137,8 +153,8 @@ def load_config(path: str | Path) -> Tuple[RunnerConfig, List[WatcherConfig], Li
         for w in raw.get("file_watcher", [])
     ]
     
-    # Use cmdorc for runner_config
-    runner_config = load_config(path)
+    # Use cmdorc's loader
+    runner_config = load_cmdorc_config(path)
     
     # Build hierarchy
     commands: Dict[str, CommandConfig] = {c.name: c for c in runner_config.commands}
@@ -191,7 +207,7 @@ Rationale: Shared config logic for any frontend.
 # src/cmdorc_frontend/state_manager.py
 from typing import Protocol
 from cmdorc import CommandOrchestrator, RunResult, RunState
-from .models import TriggerSource
+from .models import TriggerSource, PresentationUpdate
 
 class CommandView(Protocol):
     """Abstract interface any frontend must implement."""
@@ -244,7 +260,7 @@ Rationale: UI-agnostic reconciliation.
 - In `cmdorc_frontend/watchers.py`: Abstract protocol.
 ```python
 # src/cmdorc_frontend/watchers.py
-from typing import Protocol, Callable
+from typing import Protocol, Callable, Awaitable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -258,22 +274,22 @@ class WatcherConfig:
     debounce_ms: int = 300
 
 class TriggerSourceWatcher(Protocol):
+    def add_watch(self, config: WatcherConfig) -> None: ...
     def start(self) -> None: ...
     def stop(self) -> None: ...
-    def add_watch(self, config: WatcherConfig, on_trigger: Callable[[str], None]) -> None: ...
 ```
 - Test: N/A (protocol).
 
 Rationale: Allows frontend-specific watchers.
 
-### Step 5: TUI-Specific File Watcher (2-3 hours)
+### Step 6: TUI-Specific File Watcher (2-3 hours)
 - In `textual_cmdorc/file_watcher.py`: Concrete watchdog impl implementing protocol.
 ```python
 # src/textual_cmdorc/file_watcher.py
 from cmdorc_frontend.watchers import TriggerSourceWatcher, WatcherConfig
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Callable
+from typing import List
 import asyncio
 import logging
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
@@ -321,7 +337,7 @@ class WatchdogWatcher(TriggerSourceWatcher):
         self.observer = Observer()
         self.handlers: List[_DebouncedHandler] = []
 
-    def add_watch(self, config: WatcherConfig, on_trigger: Callable[[str], None]) -> None:
+    def add_watch(self, config: WatcherConfig) -> None:
         if not config.dir.exists():
             logger.warning(f"Watcher directory does not exist: {config.dir}")
             return
@@ -345,7 +361,7 @@ class WatchdogWatcher(TriggerSourceWatcher):
 
 Rationale: Concrete impl for TUI; follows shared protocol.
 
-### Step 5: TUI Widgets (2-3 hours)
+### Step 6: TUI Widgets (2-3 hours)
 - In `textual_cmdorc/widgets.py`: CmdorcCommandLink implementing CommandView.
 ```python
 # src/textual_cmdorc/widgets.py
@@ -388,6 +404,7 @@ class CmdorcCommandLink(CommandLink, CommandView):
             self.set_output_path(update.output_path)
 
     def update_from_run_result(self, result: RunResult, trigger_source: TriggerSource) -> None:
+        from cmdorc_frontend.models import map_run_state_to_icon
         icon = map_run_state_to_icon(result.state)
         tooltip = f"{result.state.value} ({result.duration_str})"
         update = PresentationUpdate(icon=icon, running=(result.state == RunState.RUNNING), tooltip=tooltip, output_path=result.output if result.state in [RunState.SUCCESS, RunState.FAILED, RunState.CANCELLED] else None)
@@ -415,9 +432,11 @@ from cmdorc import CommandOrchestrator, RunHandle, RunResult, RunState
 from cmdorc_frontend.state_manager import StateReconciler
 from cmdorc_frontend.models import TriggerSource, PresentationUpdate
 from .widgets import CmdorcCommandLink
+from cmdorc_frontend.config import CommandNode
+import logging
 
 def create_command_link(
-    node: 'CommandNode',
+    node: CommandNode,
     orchestrator: CommandOrchestrator,
     on_status_change: Callable[[RunState, RunResult], None] | None = None
 ) -> CmdorcCommandLink:
@@ -430,17 +449,17 @@ def create_command_link(
         link.update_from_run_result(result, trigger_source)
         if on_status_change:
             on_status_change(result.state, result)
-        logging.debug(f"Updated {node.config.name} to {result.state.value}")
+        logging.debug(f"Updated {node.name} to {result.state.value}")
     
     # Wire callbacks
     orchestrator.set_lifecycle_callback(
-        node.config.name,
+        node.name,
         on_success=lambda h, ctx: update_from_result(h._result, ctx),
         on_failed=lambda h, ctx: update_from_result(h._result, ctx),
         on_cancelled=lambda h, ctx: update_from_result(h._result, ctx)
     )
     orchestrator.on_event(
-        f"command_started:{node.config.name}",
+        f"command_started:{node.name}",
         lambda h, ctx: update_from_result(h._result, ctx) if h else None
     )
     
@@ -450,7 +469,7 @@ def create_command_link(
 
 Rationale: Wires tooltips with trigger context from TriggerContext.
 
-### Step 7: Main App Implementation (6-10 hours)
+### Step 6: Main App Implementation (6-10 hours)
 - In `textual_cmdorc/app.py`: Integrate all, with watcher start/stop. Use Tree for hierarchy.
 ```python
 # src/textual_cmdorc/app.py
@@ -459,7 +478,7 @@ from textual.message import Message
 from textual.widgets import Tree, Log, Input, Footer
 from textual.reactive import reactive
 from cmdorc import CommandOrchestrator, RunState
-from cmdorc_frontend.config import load_runner_and_watchers, CommandNode
+from cmdorc_frontend.config import load_frontend_config, CommandNode
 from .file_watcher import WatchdogWatcher
 from .integrator import create_command_link
 from cmdorc_frontend.state_manager import StateReconciler
@@ -481,7 +500,7 @@ class CmdorcApp(App):
         super().__init__(**kwargs)
         setup_logging()
         self.config_path_str = config_path
-        self.runner_config, self.watcher_configs, self.hierarchy = load_runner_and_watchers(self.config_path_str)
+        self.runner_config, self.watcher_configs, self.hierarchy = load_frontend_config(self.config_path_str)
         self.orchestrator = CommandOrchestrator(self.runner_config)
         self.loop = asyncio.get_event_loop()
         self.watcher_manager = WatchdogWatcher(self.orchestrator, self.loop)
@@ -490,7 +509,7 @@ class CmdorcApp(App):
     
     async def on_mount(self) -> None:
         for wc in self.watcher_configs:
-            self.watcher_manager.add_watch(wc, on_trigger=self.orchestrator.trigger)
+            self.watcher_manager.add_watch(wc)
         self.watcher_manager.start()
         # Reconcile after tree build
         for links in self.link_registry.values():
@@ -537,7 +556,7 @@ class CmdorcApp(App):
     
     async def action_reload_config(self):
         """Reload configuration from disk."""
-        self.runner_config, self.watcher_configs, self.hierarchy = load_runner_and_watchers(self.config_path_str)
+        self.runner_config, self.watcher_configs, self.hierarchy = load_frontend_config(self.config_path_str)
         self.command_tree.clear()
         self.link_registry = {}
         self.build_command_tree(self.command_tree, self.hierarchy)
