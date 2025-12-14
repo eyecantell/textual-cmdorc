@@ -142,49 +142,26 @@ debounce_ms = 300                # optional, default 300
 
 ## 6. Key Classes & Public Contracts
 
-### `src/textual_cmdorc/config_parser.py`
+### `src/cmdorc_frontend/config.py`
 ```python
-def load_runner_and_watchers(
+def load_frontend_config(
     config_path: str | Path
-) -> tuple[RunnerConfig, list[FileWatcherConfig], list[CommandNode]]:
-    """Single function used by the app. Returns everything needed."""
+) -> tuple[RunnerConfig, list[WatcherConfig], list[CommandNode]]:
+    """Single function used by any frontend. Returns everything needed."""
 ```
 
-### `src/textual_cmdorc/file_watcher.py`
+### `src/cmdorc_frontend/models.py`
 ```python
-@dataclass(frozen=True)
-class FileWatcherConfig:
-    dir: Path
-    patterns: list[str] | None = None
-    extensions: list[str] | None = None
-    ignore_dirs: list[str] | None = None
-    trigger: str = ""
-    debounce_ms: int = 300
-
-class FileWatcherManager:
-    def __init__(self, orchestrator: CommandOrchestrator, loop: asyncio.AbstractEventLoop)
-    def add_watcher(self, cfg: FileWatcherConfig) -> None
-    def start(self) -> None
-    def stop(self) -> None
-```
-
-### `src/textual_cmdorc/widgets.py`
-```python
+@dataclass
+class CommandNode:
+    config: CommandConfig
+    children: list['CommandNode'] | None = None
+    
 @dataclass
 class TriggerSource:
     name: str
     kind: Literal["manual", "file", "lifecycle"]
 
-class CmdorcCommandLink(CommandLink):
-    config: CommandConfig
-    current_trigger: TriggerSource = TriggerSource("Idle", "manual")
-
-    def apply_update(self, update: PresentationUpdate) -> None
-    def _update_tooltips(self) -> None
-```
-
-### `src/textual_cmdorc/integrator.py`
-```python
 @dataclass
 class PresentationUpdate:
     icon: str
@@ -192,15 +169,69 @@ class PresentationUpdate:
     tooltip: str
     output_path: Path | None
 
+def map_run_state_to_icon(state: RunState) -> str:
+    """Map RunState to icon string."""
+```
+
+### `src/cmdorc_frontend/state_manager.py`
+```python
+class CommandView(Protocol):
+    def set_running(self, running: bool, tooltip: str) -> None: ...
+    def set_result(self, icon: str, tooltip: str, output_path: Path | None) -> None: ...
+    @property
+    def command_name(self) -> str: ...
+
 class StateReconciler:
     def __init__(self, orchestrator: CommandOrchestrator)
-    def reconcile_link(self, link: CmdorcCommandLink) -> None
+    def reconcile(self, view: CommandView) -> None
+```
 
+### `src/cmdorc_frontend/watchers.py`
+```python
+@dataclass
+class WatcherConfig:
+    dir: Path
+    patterns: list[str] | None = None
+    extensions: list[str] | None = None
+    ignore_dirs: list[str] | None = None
+    trigger: str = ""
+    debounce_ms: int = 300
+
+class TriggerSourceWatcher(Protocol):
+    def add_watch(self, config: WatcherConfig) -> None: ...
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+```
+
+### `src/textual_cmdorc/file_watcher.py`
+```python
+class WatchdogWatcher(TriggerSourceWatcher):
+    def __init__(self, orchestrator: CommandOrchestrator, loop: asyncio.AbstractEventLoop)
+    def add_watch(self, cfg: WatcherConfig) -> None
+    def start(self) -> None
+    def stop(self) -> None
+```
+
+### `src/textual_cmdorc/widgets.py`
+```python
+class CmdorcCommandLink(CommandLink, CommandView):
+    config: CommandConfig
+    current_trigger: TriggerSource = TriggerSource("Idle", "manual")
+
+    def set_running(self, running: bool, tooltip: str) -> None
+    def set_result(self, icon: str, tooltip: str, output_path: Path | None) -> None
+    def apply_update(self, update: PresentationUpdate) -> None
+    def _update_tooltips(self) -> None
+```
+
+### `src/textual_cmdorc/integrator.py`
+```python
 def create_command_link(
     node: CommandNode,
     orchestrator: CommandOrchestrator,
+    on_status_change: Callable[[RunState, RunResult], None] | None = None
 ) -> CmdorcCommandLink:
-    """Factory used by the app. Fully wires all callbacks."""
+    """Factory used by the TUI. Fully wires all callbacks."""
 ```
 
 ### `src/textual_cmdorc/app.py`
@@ -209,7 +240,10 @@ class CmdorcApp(App):
     def __init__(self, config_path: str = "config.toml", **kwargs)
     async def on_mount(self) -> None
     async def action_quit(self) -> None
-    # Event handlers for PlayClicked, StopClicked, Input.Submitted
+    async def action_reload_config(self) -> None
+    async def action_cancel_all(self) -> None
+    def action_toggle_log(self) -> None
+    def action_show_help(self) -> None
 ```
 
 ---

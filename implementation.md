@@ -78,9 +78,9 @@ addopts = "--cov=src/textual_cmdorc --cov-report=term-missing --cov-fail-under=9
 ```python
 # src/cmdorc_frontend/models.py
 from dataclasses import dataclass
-from typing import Literal, List
+from typing import Literal
 from pathlib import Path
-from cmdorc import RunResult, RunState, CommandConfig
+from cmdorc import RunState, CommandConfig
 
 @dataclass
 class TriggerSource:
@@ -110,6 +110,19 @@ class CommandNode:
     @property
     def triggers(self) -> list[str]:
         return self.config.triggers
+
+def map_run_state_to_icon(state: RunState) -> str:
+    """Map cmdorc.RunState enum to UI icons."""
+    if state == RunState.SUCCESS:
+        return "✅"
+    elif state == RunState.FAILED:
+        return "❌"
+    elif state == RunState.CANCELLED:
+        return "⏹"
+    elif state == RunState.RUNNING:
+        return "⏳"
+    else:
+        return "⏸"  # PENDING
 ```
 - In `textual_cmdorc/utils.py`: TUI-specific utils.
 ```python
@@ -131,7 +144,8 @@ from typing import Dict, List, Tuple
 from pathlib import Path
 import re
 import tomllib  # or tomli for <3.11
-from cmdorc import load_config as load_cmdorc_config, RunnerConfig
+import logging
+from cmdorc import load_config as load_cmdorc_config, RunnerConfig, CommandConfig
 from .models import CommandNode
 from .watchers import WatcherConfig
 
@@ -178,7 +192,7 @@ def load_frontend_config(path: str | Path) -> Tuple[RunnerConfig, List[WatcherCo
             logging.warning(f"Cycle detected at {name}, skipping duplicate")
             return None
         visited_local.add(name)
-        node = CommandNode(commands[name])
+        node = CommandNode(config=commands[name])  # ✅ Pass full config
         for child_name in graph.get(name, []):
             child_node = build_node(child_name, visited_local.copy())
             if child_node:
@@ -206,6 +220,7 @@ Rationale: Shared config logic for any frontend.
 ```python
 # src/cmdorc_frontend/state_manager.py
 from typing import Protocol
+from pathlib import Path
 from cmdorc import CommandOrchestrator, RunResult, RunState
 from .models import TriggerSource, PresentationUpdate
 
@@ -368,7 +383,7 @@ Rationale: Concrete impl for TUI; follows shared protocol.
 from textual_filelink import CommandLink
 from cmdorc import CommandConfig, RunResult, RunState
 from cmdorc_frontend.state_manager import CommandView
-from cmdorc_frontend.models import TriggerSource, PresentationUpdate
+from cmdorc_frontend.models import TriggerSource, PresentationUpdate, map_run_state_to_icon
 
 class CmdorcCommandLink(CommandLink, CommandView):
     def __init__(self, config: CommandConfig, **kwargs):
@@ -404,7 +419,6 @@ class CmdorcCommandLink(CommandLink, CommandView):
             self.set_output_path(update.output_path)
 
     def update_from_run_result(self, result: RunResult, trigger_source: TriggerSource) -> None:
-        from cmdorc_frontend.models import map_run_state_to_icon
         icon = map_run_state_to_icon(result.state)
         tooltip = f"{result.state.value} ({result.duration_str})"
         update = PresentationUpdate(icon=icon, running=(result.state == RunState.RUNNING), tooltip=tooltip, output_path=result.output if result.state in [RunState.SUCCESS, RunState.FAILED, RunState.CANCELLED] else None)
@@ -468,129 +482,6 @@ def create_command_link(
 - Test: `test_integrator.py` – Mock orchestrator/context, create link, simulate callbacks, assert update called with source.
 
 Rationale: Wires tooltips with trigger context from TriggerContext.
-
-### Step 6: Main App Implementation (6-10 hours)
-- In `textual_cmdorc/app.py`: Integrate all, with watcher start/stop. Use Tree for hierarchy.
-```python
-# src/textual_cmdorc/app.py
-from textual.app import App, ComposeResult
-from textual.message import Message
-from textual.widgets import Tree, Log, Input, Footer
-from textual.reactive import reactive
-from cmdorc import CommandOrchestrator, RunState
-from cmdorc_frontend.config import load_frontend_config, CommandNode
-from .file_watcher import WatchdogWatcher
-from .integrator import create_command_link
-from cmdorc_frontend.state_manager import StateReconciler
-from .utils import setup_logging
-from textual_filelink import CommandLink
-import asyncio
-
-class CmdorcApp(App):
-    config_path = reactive("examples/config.toml")
-    
-    BINDINGS = [
-        ("r", "reload_config", "Reload config"),
-        ("ctrl+c", "cancel_all", "Cancel all"),
-        ("ctrl+p", "toggle_log", "Toggle log pane"),
-        ("?", "show_help", "Show help"),
-    ]
-    
-    def __init__(self, config_path: str = "examples/config.toml", **kwargs):
-        super().__init__(**kwargs)
-        setup_logging()
-        self.config_path_str = config_path
-        self.runner_config, self.watcher_configs, self.hierarchy = load_frontend_config(self.config_path_str)
-        self.orchestrator = CommandOrchestrator(self.runner_config)
-        self.loop = asyncio.get_event_loop()
-        self.watcher_manager = WatchdogWatcher(self.orchestrator, self.loop)
-        self.link_registry: dict[str, list[CmdorcCommandLink]] = {}  # For broadcasting to duplicates
-        self.reconciler = StateReconciler(self.orchestrator)
-    
-    async def on_mount(self) -> None:
-        for wc in self.watcher_configs:
-            self.watcher_manager.add_watch(wc)
-        self.watcher_manager.start()
-        # Reconcile after tree build
-        for links in self.link_registry.values():
-            for link in links:
-                self.reconciler.reconcile(link)
-
-    def compose(self) -> ComposeResult:
-        self.command_tree = Tree("Commands")
-        self.build_command_tree(self.command_tree, self.hierarchy)
-        
-        yield self.command_tree
-        self.log_pane = Log(id="log")
-        yield self.log_pane
-        self.trigger_input = Input(placeholder="Enter trigger (e.g., py_file_changed)")
-        yield self.trigger_input
-        yield Footer()
-    
-    def build_command_tree(self, tree: Tree, nodes: list[CommandNode], parent=None):
-        for node in nodes:
-            link = create_command_link(node, self.orchestrator, self.on_global_status_change)
-            existing = self.link_registry.get(node.name, [])
-            if existing:
-                link.label = f"{link.label} ({len(existing) + 1})"
-            self.link_registry.setdefault(node.name, []).append(link)
-            tree_node = tree.add(link, parent=parent)  # CommandLink as label
-            self.build_command_tree(tree, node.children, parent=tree_node)
-    
-    def on_global_status_change(self, state: RunState, result: RunResult):
-        self.post_message(LogEvent(f"{result.command_name}: {state.value} ({result.duration_str})\n{result.output[:100]}..."))
-    
-    async def on_input_submitted(self, message: Input.Submitted):
-        await self.orchestrator.trigger(message.value)
-        self.post_message(LogEvent(f"Triggered: {message.value}"))
-    
-    def on_command_link_play_clicked(self, event: CommandLink.PlayClicked):
-        self.run_worker(self._run_command(event.name))
-    
-    async def _run_command(self, name: str):
-        handle: 'RunHandle' = await self.orchestrator.run_command(name)
-        await handle.wait()
-    
-    def on_command_link_stop_clicked(self, event: CommandLink.StopClicked):
-        self.run_worker(self.orchestrator.cancel_command(event.name, comment="Manual stop"))
-    
-    async def action_reload_config(self):
-        """Reload configuration from disk."""
-        self.runner_config, self.watcher_configs, self.hierarchy = load_frontend_config(self.config_path_str)
-        self.command_tree.clear()
-        self.link_registry = {}
-        self.build_command_tree(self.command_tree, self.hierarchy)
-        self.notify("Configuration reloaded", severity="information")
-    
-    async def action_cancel_all(self):
-        """Cancel all running commands."""
-        await self.orchestrator.cancel_all()
-        self.notify("All commands cancelled", severity="warning")
-
-    def action_toggle_log(self):
-        """Toggle log pane visibility."""
-        self.log_pane.display = not self.log_pane.display
-
-    def action_show_help(self):
-        """Show help screen."""
-        self.notify("Help: r=reload, Ctrl+C=cancel all, Ctrl+P=toggle log, ?=help", timeout=5)
-    
-    async def action_quit(self) -> None:
-        self.watcher_manager.stop()
-        await self.orchestrator.shutdown()
-        await super().action_quit()
-    
-    # New for structured logs
-    class LogEvent(Message):
-        def __init__(self, text: str):
-            self.text = text
-    
-    def on_log_event(self, event: LogEvent):
-        self.log_pane.write_line(event.text)
-```
-- Test: `test_app.py` – Mount app, simulate file changes/triggers/clicks, assert logs/UI updates (use Tree methods like expand/collapse in tests).
-
-Rationale: Uses Tree for proper hierarchy, interactivity, and future collapsibility. Integrates watchers; reload for dynamic configs.
 
 ### Step 7: Tests & Coverage Enforcement (5-8 hours)
 - Achieve ≥90% coverage: Unit for pure logic, integration for app.
