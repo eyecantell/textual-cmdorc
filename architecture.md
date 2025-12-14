@@ -224,7 +224,7 @@ class CmdorcApp(App):
 | widgets.py              | 92%    | Textual test utilities + reactive   |
 | app.py                  | 88%+   | Integration tests with mounted app  |
 
-CI will fail if total coverage < 90%. Add contract tests: Mock cmdorc → assert PresentationUpdate; Mock integrator → assert widget updates.
+CI will fail if total coverage < 90%. Add contract tests: Mock cmdorc → assert PresentationUpdate; Mock integrator → assert widget updates. Add golden-path snapshot test for Tree layout.
 
 ---
 
@@ -242,5 +242,7 @@ CI will fail if total coverage < 90%. Add contract tests: Mock cmdorc → assert
 ## 9. Invariants
 
 - textual-cmdorc never infers command state. It only reflects state transitions reported by cmdorc.
+- Cycles are detected and broken arbitrarily; commands involved in cycles may not appear in all branches.
+- StateReconciler is idempotent, read-only, and never triggers execution.
 
 ---
