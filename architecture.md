@@ -1,103 +1,3 @@
-### Evaluation of Suggested Changes from "suggested_changes.md"
-
-I've carefully reviewed the suggestions from the other LLM. They are thoughtful and align well with best practices for TUI design, async integration, and maintainability. I'll evaluate each major point below: summarize it, pros/cons, whether to incorporate (Yes/No/Partial), rationale, and any impact on our plan (updates to architecture.md or implementation.md).
-
-Overall: This is a strong set of refinements—mostly additive without overhauling our core. We'll incorporate ~80% to tighten the design, focusing on thread safety, state mapping, and UX for duplicates. This keeps us prudent (no big rewrites) while achieving excellence.
-
-#### 1. Clarify the Core Contract: "Who owns what state?"
-   - **Summary**: Add an explicit invariant to architecture.md: TUI reflects but never infers state. Table of data ownership.
-   - **Pros**: Reinforces separation, prevents future bugs, easy to add.
-   - **Cons**: None—it's documentation.
-   - **Incorporate?**: Yes.
-   - **Rationale**: This codifies what we already practice, improving clarity for maintainers/juniors. Prudent and zero-cost.
-   - **Impact**: Add to architecture.md section 1 (Principles) and a new section 9 (Invariants).
-
-#### 2. Trigger Semantics: Make Them First-Class (TriggerSource dataclass)
-   - **Summary**: Enrich trigger context with a dataclass (name + kind: manual/file/lifecycle/external).
-   - **Pros**: Enables richer UX (e.g., icons per kind), future filtering; minimal code.
-   - **Cons**: Slight over-enrichment for 0.1 (we only use source for tooltips now), but extensible.
-   - **Incorporate?**: Partial—Add the dataclass and enrichment, but limit kinds to "manual", "lifecycle", "file" for now (defer "external").
-   - **Rationale**: Valuable for tooltip accuracy and scalability without complexity. Avoids over-engineering by not mandating kinds everywhere yet.
-   - **Impact**: Add to widgets.py (enrich current_trigger as TriggerSource); update integrator.py callbacks. Mention in architecture.md section 4.4.
-
-#### 3. CmdorcCommandLink: Don’t let the widget map RunState → icon
-   - **Summary**: Centralize mapping in PresentationUpdate dataclass; widget applies it dumbly.
-   - **Pros**: Decouples UI from cmdorc enums, easier theming/testing.
-   - **Cons**: Adds a small class; minor refactor.
-   - **Incorporate?**: Yes.
-   - **Rationale**: Excellence in layering—widgets should be presentational. Prudent as it future-proofs without bloat.
-   - **Impact**: New dataclass in utils.py; refactor widgets.py update_from_run_result to apply_update(). Update implementation.md Step 4.
-
-#### 4. Avoid “RUNNING” in RunResult
-   - **Summary**: Treat RUNNING as transient (from started event), RunResult as terminal.
-   - **Pros**: Matches cmdorc semantics, avoids races.
-   - **Cons**: Already handled via on_event for started; minimal change needed.
-   - **Incorporate?**: Yes (already implicit).
-   - **Rationale**: Reinforces our event-driven model. No big change— just emphasize in docs.
-   - **Impact**: Add note to architecture.md section 4.4; ensure tests cover started event.
-
-#### 5. Rename integrator.py
-   - **Summary**: To wiring.py or orchestration_bridge.py.
-   - **Pros**: Clearer name.
-   - **Cons**: Unnecessary churn; "integrator" is fine and descriptive.
-   - **Incorporate?**: No.
-   - **Rationale**: Current name is prudent and matches intent. Renaming doesn't add value.
-   - **Impact**: None.
-
-#### 6. Strengthen integrator's role
-   - **Summary**: Make it the sole bridge, subscribing to all events, normalizing context.
-   - **Pros**: Already our intent; good reminder.
-   - **Cons**: None.
-   - **Incorporate?**: Yes (already doing).
-   - **Rationale**: Aligns perfectly— we'll emphasize in docs.
-   - **Impact**: Expand architecture.md section 3 table for Integrator.
-
-#### 7. Tree & Hierarchy: Add affordance for duplicates
-   - **Summary**: Registry for duplicated links; broadcast updates; UX indicators (e.g., dimmed).
-   - **Pros**: Fixes UX confusion in DAGs.
-   - **Cons**: Adds a registry (minor state in app.py).
-   - **Incorporate?**: Yes.
-   - **Rationale**: Prudent UX polish; low cost, high value for complex configs.
-   - **Impact**: Add registry dict in app.py (name → list[CmdorcCommandLink]); integrator broadcasts via it. Update implementation.md Step 6; note in architecture.md section 6.
-
-#### 8. File Watchers: Concurrency Hazard (thread safety)
-   - **Summary**: Use call_soon_threadsafe for asyncio from Watchdog thread.
-   - **Pros**: Fixes real crash risk (confirmed via my tool searches—Watchdog is threaded, asyncio not).
-   - **Cons**: Minor code change.
-   - **Incorporate?**: Yes.
-   - **Rationale**: Essential for stability (e.g., in Docker). Prudent async best practice.
-   - **Impact**: Refactor file_watcher.py _DebouncedHandler to take/inject loop and use call_soon_threadsafe. Update implementation.md Step 3; add to architecture.md section 4.2.
-
-#### 9. App Layer: Resist Feature Gravity
-   - **Summary**: No logic in events; structured logs via messages.
-   - **Pros**: Keeps app clean.
-   - **Cons**: Overkill for 0.1; current is simple.
-   - **Incorporate?**: Partial—Adopt for logs (use post_message(LogEvent)).
-   - **Rationale**: Good for scalability; start with logs to avoid god-events.
-   - **Impact**: New LogEvent class; refactor on_global_status_change. Update implementation.md Step 6.
-
-#### 10. Testing Strategy: Add “contract tests”
-   - **Summary**: Mock layers to test contracts.
-   - **Pros**: Robustness.
-   - **Cons**: Already planned in integration tests.
-   - **Incorporate?**: Yes.
-   - **Rationale**: Enhances coverage without extra work.
-   - **Impact**: Expand architecture.md section 7; add to implementation.md Step 7.
-
-#### 11. Big Picture: Platform Acknowledgment
-   - **Summary**: Praise for extensibility.
-   - **Incorporate?**: N/A (motivational).
-   - **Rationale**: Agree—our design supports it.
-   - **Impact**: None.
-
-### Overall Incorporation Summary
-- **Yes/Partial**: 9/11 — Tightens without overhauling.
-- **Changes Needed**: Minor refactors (thread safety, PresentationUpdate, registry, enriched triggers, structured logs).
-- **Effort**: +4-8 hours total; keeps within estimate.
-- **Benefits**: Better UX (duplicates), stability (threads), maintainability (layering).
-
-Now, updated documents incorporating these. (Only changes shown; full text as per format.)
-
 # tc_architecture.md — textual-cmdorc Architecture Reference  
 **Version:** 0.1.0 (Pre-implementation)  
 **Status:** Authoritative design document — supersedes all prior discussion
@@ -183,6 +83,7 @@ sequenceDiagram
     CmdorcApp->>FileWatcherManager: start()
     CmdorcApp->>Integrator: create_command_link() for each node
     Integrator->>CmdorcCommandLink: __init__ + set_lifecycle_callback() + on_event()
+    CmdorcApp->>Integrator: reconcile_link() for each link  # NEW: State sync
 ```
 
 ### 4.2 File Change → Trigger
@@ -291,6 +192,10 @@ class PresentationUpdate:
     tooltip: str
     output_path: Path | None
 
+class StateReconciler:
+    def __init__(self, orchestrator: CommandOrchestrator)
+    def reconcile_link(self, link: CmdorcCommandLink) -> None
+
 def create_command_link(
     node: CommandNode,
     orchestrator: CommandOrchestrator,
@@ -321,10 +226,6 @@ class CmdorcApp(App):
 
 CI will fail if total coverage < 90%. Add contract tests: Mock cmdorc → assert PresentationUpdate; Mock integrator → assert widget updates.
 
-## 9. Invariants
-
-- textual-cmdorc never infers command state. It only reflects state transitions reported by cmdorc.
-
 ---
 
 ## 8. Implementation Order (for implementation.md)
@@ -337,5 +238,9 @@ CI will fail if total coverage < 90%. Add contract tests: Mock cmdorc → assert
 6. `app.py` → integrate everything, mount/stop watchers, tree building
 7. Tests & coverage enforcement
 8. Documentation & examples
+
+## 9. Invariants
+
+- textual-cmdorc never infers command state. It only reflects state transitions reported by cmdorc.
 
 ---

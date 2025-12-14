@@ -232,6 +232,9 @@ class _DebouncedHandler(FileSystemEventHandler):
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
             return
+        if not self.loop.is_running():
+            logger.error("Event loop stopped, cannot schedule file event")
+            return
         self.loop.call_soon_threadsafe(lambda: self._schedule(event))
 
 class FileWatcherManager:
@@ -265,55 +268,6 @@ class FileWatcherManager:
 
 Rationale: Debounced, cross-platform triggering; only interacts via orchestrator.trigger().
 
-### Step 4: Widget Integration (3-5 hours)
-- In `widgets.py`: Subclass CommandLink for cmdorc-specific logic.
-```python
-# src/textual_cmdorc/widgets.py
-from textual_filelink import CommandLink
-from cmdorc import CommandConfig, RunResult
-from .utils import PresentationUpdate, TriggerSource
-
-class CmdorcCommandLink(CommandLink):
-    def __init__(self, config: CommandConfig, **kwargs):
-        super().__init__(
-            label=config.name,
-            output_path=None,  # Set later
-            initial_status_icon="❓",
-            initial_status_tooltip="Idle",
-            show_toggle=False,
-            show_settings=False,
-            show_remove=False,
-            **kwargs
-        )
-        self.config = config
-        self.current_trigger: TriggerSource = TriggerSource("Idle", "manual")
-        self._update_tooltips()
-
-    def apply_update(self, update: PresentationUpdate) -> None:
-        self.set_status(icon=update.icon, running=update.running, tooltip=update.tooltip)
-        if update.output_path:
-            self.set_output_path(update.output_path)
-
-    def update_from_run_result(self, result: RunResult, trigger_source: TriggerSource) -> None:
-        from .utils import map_run_state_to_icon
-        icon = map_run_state_to_icon(result.state.value)
-        tooltip = f"{result.state.value} ({result.duration_str})"
-        update = PresentationUpdate(icon=icon, running=(result.state == 'RUNNING'), tooltip=tooltip, output_path=result.output if result.state in ['SUCCESS', 'FAILED', 'CANCELLED'] else None)
-        self.apply_update(update)
-        self.current_trigger = trigger_source
-        self._update_tooltips()
-
-    def _update_tooltips(self) -> None:
-        if self.is_running:
-            self.set_stop_tooltip(f"Stop — Running because: {self.current_trigger.name} ({self.current_trigger.kind})")
-        else:
-            triggers = ", ".join(self.config.triggers) or "none"
-            self.set_play_tooltip(f"Run (Triggers: {triggers} | manual)")
-```
-- Test: `test_widgets.py` – Create link, call update_from_run_result, assert tooltips/status set.
-
-Rationale: Adds dynamic tooltips with triggers; handles output path.
-
 ### Step 5: Integrator Implementation (2-4 hours)
 - In `integrator.py`: Factory to wire callbacks, capturing trigger source.
 ```python
@@ -322,6 +276,24 @@ from typing import Callable
 from cmdorc import CommandOrchestrator, RunHandle, RunResult, RunState
 from .widgets import CmdorcCommandLink, TriggerSource
 import logging
+
+class StateReconciler:
+    def __init__(self, orchestrator: CommandOrchestrator):
+        self.orchestrator = orchestrator
+    
+    def reconcile_link(self, link: CmdorcCommandLink) -> None:
+        status = self.orchestrator.get_status(link.config.name)
+        active_handles = self.orchestrator.get_active_handles(link.config.name)
+        if active_handles:
+            handle = active_handles[-1]
+            link.set_status(running=True, tooltip=f"Running: {handle.comment}")
+            if handle.is_finalized and hasattr(handle, '_result'):
+                pass
+        else:
+            history = self.orchestrator.get_history(link.config.name, limit=1)
+            if history:
+                result = history[0]
+                link.update_from_run_result(result, TriggerSource("recovered", "lifecycle"))
 
 def create_command_link(
     node: 'CommandNode',
@@ -357,7 +329,7 @@ def create_command_link(
 
 Rationale: Wires tooltips with trigger context from TriggerContext.
 
-### Step 6: Main App Implementation (6-10 hours)
+### Step 5: Main App Implementation (6-10 hours)
 - In `app.py`: Integrate all, with watcher start/stop. Use Tree for hierarchy.
 ```python
 # src/textual_cmdorc/app.py
@@ -367,13 +339,20 @@ from textual.reactive import reactive
 from cmdorc import CommandOrchestrator, RunState
 from .config_parser import load_runner_and_watchers, CommandNode
 from .file_watcher import FileWatcherManager
-from .integrator import create_command_link
+from .integrator import create_command_link, StateReconciler
 from .utils import setup_logging
 from textual_filelink import CommandLink
 import asyncio
 
 class CmdorcApp(App):
     config_path = reactive("examples/config.toml")
+    
+    BINDINGS = [
+        ("r", "reload_config", "Reload config"),
+        ("ctrl+c", "cancel_all", "Cancel all"),
+        ("ctrl+p", "toggle_log", "Toggle log pane"),
+        ("?", "show_help", "Show help"),
+    ]
     
     def __init__(self, config_path: str = "examples/config.toml", **kwargs):
         super().__init__(**kwargs)
@@ -384,11 +363,16 @@ class CmdorcApp(App):
         self.loop = asyncio.get_event_loop()
         self.watcher_manager = FileWatcherManager(self.orchestrator, self.loop)
         self.link_registry: dict[str, list[CmdorcCommandLink]] = {}  # For broadcasting to duplicates
+        self.reconciler = StateReconciler(self.orchestrator)
     
     async def on_mount(self) -> None:
         for wc in self.watcher_configs:
             self.watcher_manager.add_watcher(wc)
         self.watcher_manager.start()
+        # Reconcile after tree build
+        for links in self.link_registry.values():
+            for link in links:
+                self.reconciler.reconcile_link(link)
 
     def compose(self) -> ComposeResult:
         self.command_tree = Tree("Commands")
@@ -404,9 +388,9 @@ class CmdorcApp(App):
     def build_command_tree(self, tree: Tree, nodes: list[CommandNode], parent=None):
         for node in nodes:
             link = create_command_link(node, self.orchestrator, self.on_global_status_change)
-            link.id = f"cmd-{node.config.name.replace(' ', '-')}"
-            if node.config.name in self.link_registry:
-                link.label = f"{link.label} (duplicate)"  # UX affordance
+            existing = self.link_registry.get(node.config.name, [])
+            if existing:
+                link.label = f"{link.label} ({len(existing) + 1})"
             self.link_registry.setdefault(node.config.name, []).append(link)
             tree_node = tree.add(link, parent=parent)  # CommandLink as label
             self.build_command_tree(tree, node.children, parent=tree_node)
@@ -451,18 +435,18 @@ class CmdorcApp(App):
 
 Rationale: Uses Tree for proper hierarchy, interactivity, and future collapsibility. Integrates watchers; reload for dynamic configs.
 
-### Step 7: Tests & Coverage Enforcement (5-8 hours)
+### Step 5: Tests & Coverage Enforcement (5-8 hours)
 - Achieve ≥90% coverage: Unit for pure logic, integration for app.
 - Errors: Catch/log (e.g., invalid paths, concurrency limits).
 - CI: Update ci.yml with `--cov-fail-under=90`.
 
 Rationale: Enforces quality.
 
-### Step 8: Documentation & Examples (2-4 hours)
+### Step 6: Documentation & Examples (2-4 hours)
 - Update README.md with skeletal content: Features, install, quick start.
 - Add examples/config.toml with [[file_watcher]].
 
 ## Next Steps
 - Commit per step.
 - Run `pdm run ruff check . && pdm run pytest`.
-- Questions? Refer to tc_architecture.md or ask senior.
+- Questions? Refer to architecture.md or ask.
