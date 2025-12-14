@@ -131,7 +131,7 @@ from typing import Dict, List, Tuple
 from pathlib import Path
 import re
 import tomllib  # or tomli for <3.11
-from cmdorc import load_config as load_cmdorc_config, RunnerConfig, CommandConfig
+from cmdorc import load_config as load_cmdorc_config, RunnerConfig
 from .models import CommandNode
 from .watchers import WatcherConfig
 
@@ -260,7 +260,7 @@ Rationale: UI-agnostic reconciliation.
 - In `cmdorc_frontend/watchers.py`: Abstract protocol.
 ```python
 # src/cmdorc_frontend/watchers.py
-from typing import Protocol, Callable, Awaitable
+from typing import Protocol
 from dataclasses import dataclass
 from pathlib import Path
 
