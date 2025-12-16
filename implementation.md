@@ -17,7 +17,15 @@ The TUI will:
 - Show helpful hints in tooltips for unconfigured keyboard shortcuts.
 - Graceful shutdown on app close.
 
-This plan is for a junior developer: Step-by-step, with code snippets, testing, and rationale. Assume Python/Textual/async basics. Estimated effort: 30-50 hours (updated to include trigger chains and keyboard features).
+This plan is for a junior developer: Step-by-step, with code snippets, testing, and rationale. Assume Python/Textual/async basics.
+
+**Estimated Effort:**
+- **Original estimate:** 10-14 hours (trigger chains + keyboard shortcuts)
+- **With UX enhancements:** +3-4 hours (semantic summaries, validation summary, duplicate indicators, help screen)
+- **With embedding architecture:** +3-4 hours (Controller/View/App split for embeddability)
+- **Total: 19-24 hours** (Phase 0 is foundational and critical - complete it first)
+
+**Major Architectural Change in v0.1:** The monolithic `CmdorcApp` design is replaced with a three-layer embeddable architecture to support both standalone TUI and embedding in larger applications. See Phase 0 for details.
 
 ### Prerequisites
 - Python 3.10+.
@@ -103,9 +111,431 @@ triggers = ["py_file_changed"]
 - Duplicate keys will log warnings; last definition wins.
 - References to unknown commands will log warnings.
 
-## Step-by-Step Implementation
+## Implementation Phases Overview
 
-### Step 1: Project Setup & Boilerplate (1-2 hours)
+This implementation is organized into **8 phases** (up from the original 10-step structure):
+
+- **Phase 0** (3-4 hours): Embeddable architecture - Create Controller, View, and Notifier to support both standalone and embedded usage modes
+- **Phases 1-7** (16-20 hours): Features, UX, and polish - Config parsing, trigger chains, duplicate indicators, keyboard shortcuts, validation, help screen, and integration
+
+**Total Estimated Effort:** 19-24 hours (up from 10-14 hours originally, due to embedding architecture + UX enhancements)
+
+**Key Architectural Change:** The monolithic `CmdorcApp` is now split into three layers:
+1. **CmdorcController** (Layer 3) - Non-Textual, handles orchestration
+2. **CmdorcView** (Layer 2) - Passive Textual widget, handles rendering
+3. **CmdorcApp** (Layer 1) - Thin shell for standalone mode
+
+This enables both standalone TUI and embedding in larger applications.
+
+---
+
+## Phase 0: Embeddable Architecture (FOUNDATIONAL)
+
+This phase establishes the foundational architecture that enables the project to work both standalone and embedded. **Complete this phase before starting other features.**
+
+### Phase 0, Step 1: Create CmdorcNotifier Protocol & Implementations (30 min)
+
+**Why:** Pluggable logging allows host apps to control notification behavior.
+
+Create `src/cmdorc_frontend/notifier.py`:
+
+```python
+# src/cmdorc_frontend/notifier.py
+from typing import Protocol
+import logging
+from textual.widgets import Log
+
+class CmdorcNotifier(Protocol):
+    """Protocol for pluggable notifications."""
+
+    def info(self, message: str) -> None:
+        """Informational message."""
+        ...
+
+    def warning(self, message: str) -> None:
+        """Warning message."""
+        ...
+
+    def error(self, message: str) -> None:
+        """Error message."""
+        ...
+
+
+class LoggingNotifier:
+    """Default implementation using stdlib logging."""
+
+    def __init__(self, logger: logging.Logger | None = None):
+        self.logger = logger or logging.getLogger(__name__)
+
+    def info(self, msg: str) -> None:
+        self.logger.info(msg)
+
+    def warning(self, msg: str) -> None:
+        self.logger.warning(msg)
+
+    def error(self, msg: str) -> None:
+        self.logger.error(msg)
+
+
+class TextualLogPaneNotifier:
+    """Textual-specific implementation for standalone mode."""
+
+    def __init__(self, log_pane: Log):
+        self.log_pane = log_pane
+
+    def info(self, msg: str) -> None:
+        self.log_pane.write_line(f"ℹ️  {msg}")
+
+    def warning(self, msg: str) -> None:
+        self.log_pane.write_line(f"⚠️  {msg}")
+
+    def error(self, msg: str) -> None:
+        self.log_pane.write_line(f"❌ {msg}")
+```
+
+### Phase 0, Step 2: Create CmdorcController Class (1.5 hours)
+
+**Why:** Non-Textual controller enables programmatic use without Textual dependency.
+
+Create `src/textual_cmdorc/controller.py`:
+
+```python
+# src/textual_cmdorc/controller.py
+import asyncio
+from pathlib import Path
+from typing import Callable, Optional
+from cmdorc import CommandOrchestrator
+from cmdorc_frontend.config import load_frontend_config
+from cmdorc_frontend.models import TriggerSource, CommandNode
+from cmdorc_frontend.notifier import CmdorcNotifier, LoggingNotifier
+from textual_cmdorc.file_watcher import WatchdogWatcher
+
+
+class CmdorcController:
+    """Non-Textual controller for orchestration logic. Primary embed point."""
+
+    def __init__(
+        self,
+        config_path: str | Path,
+        notifier: CmdorcNotifier | None = None,
+        enable_watchers: bool = True
+    ):
+        """Initialize controller.
+
+        Args:
+            config_path: Path to TOML config
+            notifier: Optional notification handler (defaults to LoggingNotifier)
+            enable_watchers: If True, watchers auto-start on attach(). If False, host controls lifecycle.
+        """
+        self.config_path = Path(config_path)
+        self.notifier = notifier or LoggingNotifier()
+        self._enable_watchers = enable_watchers
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._file_watcher: Optional[WatchdogWatcher] = None
+
+        # Load configuration
+        (
+            self.runner_config,
+            self.keyboard_config,
+            self.watcher_configs,
+            self.hierarchy
+        ) = load_frontend_config(self.config_path)
+
+        # Initialize orchestrator
+        self.orchestrator = CommandOrchestrator(self.runner_config)
+
+        # Outbound events (host wires these)
+        self.on_command_started: Callable[[str, TriggerSource], None] | None = None
+        self.on_command_finished: Callable[[str, object], None] | None = None
+        self.on_validation_result: Callable[[dict], None] | None = None
+
+        # Intent signals
+        self.on_quit_requested: Callable[[], None] | None = None
+        self.on_cancel_all_requested: Callable[[], None] | None = None
+
+        self.notifier.info(f"Controller initialized with config: {self.config_path}")
+
+    def attach(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Attach to event loop and start watchers if enabled."""
+        self._loop = loop
+
+        if self._enable_watchers and self.watcher_configs:
+            self._file_watcher = WatchdogWatcher(self.orchestrator, loop)
+            for cfg in self.watcher_configs:
+                self._file_watcher.add_watch(cfg)
+            self._file_watcher.start()
+            self.notifier.info(f"File watchers started ({len(self.watcher_configs)} configured)")
+
+    def detach(self) -> None:
+        """Stop watchers and cleanup."""
+        if self._file_watcher:
+            self._file_watcher.stop()
+            self._file_watcher = None
+            self.notifier.info("File watchers stopped")
+
+    async def run_command(self, name: str) -> None:
+        """Run a command by name."""
+        if not self.orchestrator.has_command(name):
+            self.notifier.warning(f"Command not found: {name}")
+            return
+
+        await self.orchestrator.run_command(name)
+        self.notifier.info(f"Started: {name}")
+
+    async def cancel_command(self, name: str) -> None:
+        """Cancel a running command."""
+        if not self.orchestrator.has_command(name):
+            self.notifier.warning(f"Command not found: {name}")
+            return
+
+        await self.orchestrator.cancel_command(name)
+        self.notifier.info(f"Cancelled: {name}")
+
+    async def reload_config(self) -> None:
+        """Reload configuration from disk."""
+        try:
+            (
+                self.runner_config,
+                self.keyboard_config,
+                self.watcher_configs,
+                self.hierarchy
+            ) = load_frontend_config(self.config_path)
+            self.notifier.info("Configuration reloaded")
+        except Exception as e:
+            self.notifier.error(f"Failed to reload config: {e}")
+
+    @property
+    def keyboard_bindings(self) -> dict[str, tuple[str, Callable]]:
+        """Keyboard shortcuts as metadata for host to optionally bind."""
+        if not self.keyboard_config.enabled:
+            return {}
+
+        bindings = {}
+        for cmd_name, key in self.keyboard_config.shortcuts.items():
+            async def cmd_callback(name=cmd_name):
+                await self.run_command(name)
+            bindings[key] = (cmd_name, cmd_callback)
+        return bindings
+```
+
+### Phase 0, Step 3: Create CmdorcView Widget (1 hour)
+
+**Why:** Passive Textual widget for rendering that works in embedded contexts.
+
+Create `src/textual_cmdorc/view.py`:
+
+```python
+# src/textual_cmdorc/view.py
+from textual.widget import Widget
+from textual.widgets import Tree
+from textual.containers import Container
+from textual_cmdorc.controller import CmdorcController
+from textual_cmdorc.widgets import CmdorcCommandLink
+
+
+class CmdorcView(Widget):
+    """Textual widget for rendering cmdorc command tree. Suitable for embedding."""
+
+    def __init__(
+        self,
+        controller: CmdorcController,
+        show_log_pane: bool = True,
+        enable_local_bindings: bool = False
+    ):
+        """Initialize view.
+
+        Args:
+            controller: CmdorcController instance
+            show_log_pane: Whether to render log pane
+            enable_local_bindings: If True, handle keys when focused (standalone only)
+        """
+        super().__init__()
+        self.controller = controller
+        self.show_log_pane = show_log_pane
+        self.enable_local_bindings = enable_local_bindings
+        self._command_links = {}  # Map command name -> CmdorcCommandLink
+
+    def compose(self):
+        """Compose tree and optional log pane."""
+        tree = Tree("Commands")
+        yield tree
+
+        # Optional log pane
+        if self.show_log_pane:
+            from textual.widgets import Log
+            yield Log()
+
+    def on_mount(self) -> None:
+        """Build command tree from controller.hierarchy."""
+        tree = self.query_one(Tree)
+        self._build_tree(tree, self.controller.hierarchy)
+
+    def _build_tree(self, tree, nodes, parent=None):
+        """Recursively build tree from CommandNode hierarchy."""
+        from textual_cmdorc.integrator import create_command_link
+
+        for node in nodes:
+            link = create_command_link(node, self.controller.orchestrator)
+            self._command_links[node.name] = link
+
+            if parent is None:
+                tree.root.add(link)
+            else:
+                parent.add(link)
+
+            if node.children:
+                self._build_tree(tree, node.children, link)
+
+    def refresh_tree(self) -> None:
+        """Rebuild tree from controller.hierarchy."""
+        tree = self.query_one(Tree)
+        tree.clear()
+        self._command_links.clear()
+        self._build_tree(tree, self.controller.hierarchy)
+```
+
+### Phase 0, Step 4: Refactor CmdorcApp to Thin Shell (1 hour)
+
+**Why:** CmdorcApp becomes a lightweight standalone wrapper, not the monolith.
+
+Update `src/textual_cmdorc/app.py`:
+
+```python
+# src/textual_cmdorc/app.py
+import asyncio
+from textual.app import App, ComposeResult
+from textual.widgets import Header, Footer, Container
+from textual_cmdorc.controller import CmdorcController
+from textual_cmdorc.view import CmdorcView
+
+
+class CmdorcApp(App):
+    """Standalone mode - thin shell composing controller + view."""
+
+    TITLE = "cmdorc TUI"
+    SUB_TITLE = "Command orchestration interface"
+
+    def __init__(self, config_path: str = "config.toml", **kwargs):
+        super().__init__(**kwargs)
+        self.controller = CmdorcController(config_path, enable_watchers=True)
+        self.view: CmdorcView | None = None
+
+    def compose(self) -> ComposeResult:
+        """Compose app with header, view, footer."""
+        yield Header()
+        self.view = CmdorcView(self.controller, show_log_pane=True)
+        yield self.view
+        yield Footer()
+
+    async def on_mount(self) -> None:
+        """Attach controller to event loop and bind keyboard shortcuts."""
+        loop = asyncio.get_running_loop()
+        self.controller.attach(loop)
+
+        # Bind global keyboard shortcuts
+        for key, (cmd_name, callback) in self.controller.keyboard_bindings.items():
+            self.bind(key, f"run_command('{cmd_name}')", description=f"Run/stop {cmd_name}")
+
+    async def on_unmount(self) -> None:
+        """Cleanup on shutdown."""
+        self.controller.detach()
+
+    async def action_quit(self) -> None:
+        """Quit application."""
+        self.exit()
+
+    async def action_reload_config(self) -> None:
+        """Reload configuration."""
+        await self.controller.reload_config()
+        if self.view:
+            self.view.refresh_tree()
+```
+
+### Phase 0, Step 5: Write Integration Tests (1 hour)
+
+**Why:** Verify controller/view architecture works before building features.
+
+Create `tests/test_controller.py`:
+
+```python
+# tests/test_controller.py
+import pytest
+import asyncio
+from pathlib import Path
+from textual_cmdorc.controller import CmdorcController
+from cmdorc_frontend.notifier import LoggingNotifier
+
+
+@pytest.mark.asyncio
+async def test_controller_initialization(tmp_path):
+    """Test controller loads config and initializes."""
+    config = tmp_path / "config.toml"
+    config.write_text("""
+[[command]]
+name = "Test"
+command = "echo test"
+triggers = []
+""")
+
+    controller = CmdorcController(config)
+    assert controller is not None
+    assert len(controller.hierarchy) >= 1
+
+
+@pytest.mark.asyncio
+async def test_controller_attach_detach(tmp_path):
+    """Test controller lifecycle."""
+    config = tmp_path / "config.toml"
+    config.write_text("""
+[[command]]
+name = "Test"
+command = "echo test"
+triggers = []
+""")
+
+    controller = CmdorcController(config, enable_watchers=False)
+    loop = asyncio.get_running_loop()
+
+    controller.attach(loop)  # Should not raise
+    controller.detach()  # Should not raise
+
+
+@pytest.mark.asyncio
+async def test_keyboard_bindings(tmp_path):
+    """Test keyboard metadata exposure."""
+    config = tmp_path / "config.toml"
+    config.write_text("""
+[keyboard]
+shortcuts = { Test = "1" }
+
+[[command]]
+name = "Test"
+command = "echo test"
+triggers = []
+""")
+
+    controller = CmdorcController(config)
+    bindings = controller.keyboard_bindings
+    assert "1" in bindings
+    assert bindings["1"][0] == "Test"
+```
+
+**Summary of Phase 0:**
+
+After this phase, you have:
+- Non-Textual controller that can be used programmatically
+- Passive view widget suitable for embedding
+- Standalone app that composes them for TUI mode
+- Pluggable notifier for custom logging
+- Full architecture enabling both embedded and standalone usage
+
+You're now ready for Phases 1-7, which add features while maintaining this architecture.
+
+---
+
+## Phase 1: Configuration & Model Enhancement (2-3 hours)
+
+### Phase 1, Step 1: Project Setup & Boilerplate (1-2 hours)
 - Create structure as above.
 - In `textual_cmdorc/__init__.py`: `from .app import CmdorcApp`
 - In `cmdorc_frontend/models.py`: Shared models.

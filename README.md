@@ -5,21 +5,78 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/textual-cmdorc.svg)](https://pypi.org/project/textual-cmdorc/)
 [![License](https://img.shields.io/pypi/l/textual-cmdorc.svg)](https://github.com/eyecantell/textual-cmdorc/blob/main/LICENSE)
 
-A Textual-based TUI wrapper for [cmdorc](https://github.com/eyecantell/cmdorc), displaying hierarchical command workflows with real-time status updates, manual controls, and trigger inputs. Ideal for developer tools, automation monitoring, or interactive workflows.
+A Textual-based TUI wrapper for [cmdorc](https://github.com/eyecantell/cmdorc), displaying hierarchical command workflows with real-time status updates, manual controls, and trigger inputs.
+
+**Key Design:** Embeddable by default. Use as a **standalone TUI app** or **embed in larger applications**. The architecture splits into non-Textual controller (orchestration) and passive Textual view (rendering), enabling reuse across frontends.
+
+**Ideal for:** Developer tools, automation monitoring, interactive workflows, or as a subcomponent in larger TUIs.
 
 The project is structured with a shared backend (`cmdorc_frontend`) for config parsing, models, state management, and abstract watchers—enabling easy extension to other frontends (e.g., VSCode)—and TUI-specific code in `textual_cmdorc`.
 
 ## Features
+
+### Core Functionality
 - 📂 Load cmdorc TOML configs (e.g., config.toml) for dynamic command lists.
-- 🌳 Hierarchical display: Indents chained commands based on lifecycle triggers (success/failed/cancelled) using Textual Tree for interactivity and collapsibility.
-- 🔄 Real-time status: Spinners, icons (e.g., ✅/❌), and tooltips with full trigger chain breadcrumbs (e.g., "py_file_changed → command_success:Lint → command_success:Format").
-- ⌨️ **Global keyboard shortcuts**: Configurable hotkeys (1-9 by default) to play/stop commands from anywhere in the app. Defined in `[keyboard]` section of TOML config.
-- 🖱️ Interactive: Play/stop buttons for manual runs/cancels; input for triggers; app-level shortcuts (e.g., r to reload, Ctrl+C to cancel all).
-- 📜 Log pane: Event/output snippets with toggle visibility.
-- 🔧 File watching: Trigger events on file changes via watchdog (configurable in TOML).
-- 🔄 State reconciliation: Syncs UI with cmdorc state on startup/reload.
-- 🔍 Duplicate handling: Visual indicators for commands in multiple workflows.
-- 💡 Smart tooltips: Show trigger chains, keyboard shortcuts, and helpful configuration hints for unconfigured commands.
+- 🌳 **Hierarchical display**: Indents chained commands based on lifecycle triggers (success/failed/cancelled) using Textual Tree for interactivity and collapsibility.
+- 🔄 **Real-time status**: Spinners, icons (e.g., ✅/❌), and enhanced tooltips with full trigger chain breadcrumbs.
+- 🖱️ **Interactive**: Play/stop buttons for manual runs/cancels; app-level shortcuts (e.g., r to reload, q to quit).
+- 📜 **Log pane**: Event/output snippets with toggle visibility.
+- 🔧 **File watching**: Trigger events on file changes via watchdog (configurable in TOML).
+
+### UX Enhancements
+- 💡 **Semantic Trigger Summaries**: Tooltips show human-readable summaries ("Ran automatically (file change)") before technical details, making it clear *why* commands ran.
+- ⌨️ **Global Keyboard Shortcuts**: Configurable hotkeys (1-9 by default) to play/stop commands from anywhere. Defined in `[keyboard]` section of TOML. `[h]` shows help with all shortcuts and conflicts.
+- ✅ **Startup Validation Summary**: Config issues (missing dirs, duplicate keys, unknown commands) displayed on app start in log pane—no hunting through logs.
+- 🎯 **Duplicate Command Indicators**: Visual cues (↳ suffix) when commands appear in multiple workflows, with tooltip clarification.
+- 🎨 **Smart Tooltips**: Show semantic summaries, full trigger chains, keyboard hints, and duplicate indicators all in one place.
+
+### Embedding & Extensibility
+- 🔗 **Embeddable Architecture**: Non-Textual controller + passive widget = reusable in larger TUIs or headless scenarios.
+- 🔄 **State reconciliation**: Syncs UI with cmdorc state on startup/reload.
+- 🎛️ **Pluggable notifications**: Custom logging/notification handlers via `CmdorcNotifier` protocol.
+
+## Embedding textual-cmdorc in Larger Applications
+
+textual-cmdorc can be used as a widget in any larger Textual app. Here's how:
+
+```python
+from textual.app import App, ComposeResult
+from textual.containers import Horizontal
+from textual_cmdorc import CmdorcController, CmdorcView
+
+class MyLargerApp(App):
+    """Example: Embed cmdorc command orchestration in a larger TUI."""
+
+    def compose(self) -> ComposeResult:
+        # Host app creates and owns the controller
+        self.cmdorc = CmdorcController(
+            "config.toml",
+            enable_watchers=False  # Host controls watcher lifecycle
+        )
+
+        # Wire controller events to host app
+        self.cmdorc.on_command_finished = self.on_cmdorc_done
+
+        # CmdorcView is a passive widget—just include it in layout
+        yield Horizontal(
+            CmdorcView(self.cmdorc, show_log_pane=False),  # Embedded view
+            MyOtherPanel(),
+        )
+
+    async def on_mount(self):
+        # Host controls when to start watchers
+        import asyncio
+        loop = asyncio.get_running_loop()
+        self.cmdorc.attach(loop)
+
+    async def on_unmount(self):
+        self.cmdorc.detach()
+
+    def on_cmdorc_done(self, name: str, result):
+        self.notify(f"Command finished: {name}")
+```
+
+See [architecture.md](architecture.md#65-embedding-architecture--contracts) for detailed embedding contracts and design details.
 
 ## Installation
 ```bash
