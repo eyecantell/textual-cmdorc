@@ -33,6 +33,11 @@ app = CmdorcApp(config_path="config.toml")
 app.run()
 ```
 
+```python
+# Initialize new config with keyboard shortcuts
+cmdorc init config.toml  # Generates config with [keyboard] placeholders
+```
+
 Only one public class is exposed: `CmdorcApp`.
 
 ---
@@ -60,11 +65,11 @@ Only one public class is exposed: `CmdorcApp`.
 
 | Component                    | Owns                                                                 | Does NOT Own                                  |
 |------------------------------|----------------------------------------------------------------------|-----------------------------------------------|
-| **CmdorcApp**                | Textual lifecycle, layout, global hotkeys, log pane                  | Command execution, file watching logic        |
-| **ConfigParser**             | Load TOML → `RunnerConfig` + `list[FileWatcherConfig]` + hierarchy  | UI rendering                                  |
+| **CmdorcApp**                | Textual lifecycle, layout, global keyboard shortcuts, log pane       | Command execution, file watching logic        |
+| **ConfigParser**             | Load TOML → `RunnerConfig` + `KeyboardConfig` + `list[FileWatcherConfig]` + hierarchy  | UI rendering                                  |
 | **FileWatcherManager**       | Starts/stops `watchdog` observers, debounced `orchestrator.trigger()`| UI, command state                             |
 | **Integrator**               | Creates `CmdorcCommandLink`, wires cmdorc lifecycle callbacks        | File watching, config parsing                 |
-| **CmdorcCommandLink**        | Subclass of `CommandLink`; adds `current_trigger`, dynamic tooltips | Execution logic                               |
+| **CmdorcCommandLink**        | Subclass of `CommandLink`; adds trigger chain, keyboard shortcuts, dynamic tooltips | Execution logic                               |
 
 ---
 
@@ -126,9 +131,13 @@ Trigger source is captured in the `on_event` callback using `TriggerContext` (cm
 ## 5. Configuration Extensions
 
 ```toml
-# Existing cmdorc [[command]] tables unchanged
+# NEW: Global keyboard shortcuts (optional)
+[keyboard]
+shortcuts = { Lint = "1", Format = "2", Tests = "3", Build = "b" }
+enabled = true                   # optional, default true
+show_in_tooltips = true          # optional, default true
 
-# New optional section — may appear zero or more times
+# File watchers (optional, may appear zero or more times)
 [[file_watcher]]
 dir = "./src"                    # required
 patterns = ["**/*.py", "**/*.pyi"]  # optional, takes precedence
@@ -146,8 +155,17 @@ debounce_ms = 300                # optional, default 300
 ```python
 def load_frontend_config(
     config_path: str | Path
-) -> tuple[RunnerConfig, list[WatcherConfig], list[CommandNode]]:
+) -> tuple[RunnerConfig, KeyboardConfig, list[WatcherConfig], list[CommandNode]]:
     """Single function used by any frontend. Returns everything needed."""
+
+def init_keyboard_config(runner_config: RunnerConfig, output_path: Path | None = None) -> str:
+    """Generate initial [keyboard] section with no-op placeholders."""
+
+@dataclass
+class KeyboardConfig:
+    shortcuts: dict[str, str]  # command_name -> key
+    enabled: bool = True
+    show_in_tooltips: bool = True
 ```
 
 ### `src/cmdorc_frontend/models.py`
@@ -159,8 +177,15 @@ class CommandNode:
     
 @dataclass
 class TriggerSource:
-    name: str
+    name: str  # Last trigger in chain (backward compat)
     kind: Literal["manual", "file", "lifecycle"]
+    chain: list[str]  # NEW: Full trigger chain from cmdorc
+
+    @classmethod
+    def from_trigger_chain(cls, trigger_chain: list[str]) -> 'TriggerSource': ...
+
+    def format_chain(self, separator: str = " → ", max_width: int | None = None) -> str:
+        """Format chain for display, with optional left truncation.""" ...
 
 @dataclass
 class PresentationUpdate:
@@ -216,12 +241,13 @@ class WatchdogWatcher(TriggerSourceWatcher):
 ```python
 class CmdorcCommandLink(CommandLink, CommandView):
     config: CommandConfig
-    current_trigger: TriggerSource = TriggerSource("Idle", "manual")
+    current_trigger: TriggerSource = TriggerSource("Idle", "manual", chain=[])
+    keyboard_shortcut: str | None = None  # NEW
 
     def set_running(self, running: bool, tooltip: str) -> None
     def set_result(self, icon: str, tooltip: str, output_path: Path | None) -> None
     def apply_update(self, update: PresentationUpdate) -> None
-    def _update_tooltips(self) -> None
+    def _update_tooltips(self) -> None  # Shows trigger chain + keyboard hint
 ```
 
 ### `src/textual_cmdorc/integrator.py`
@@ -237,8 +263,12 @@ def create_command_link(
 ### `src/textual_cmdorc/app.py`
 ```python
 class CmdorcApp(App):
+    keyboard_config: KeyboardConfig
+    key_to_command: dict[str, str]  # NEW: Reverse lookup for global shortcuts
+
     def __init__(self, config_path: str = "config.toml", **kwargs)
     async def on_mount(self) -> None
+    def on_key(self, event: Key) -> None  # NEW: Global keyboard handler
     async def action_quit(self) -> None
     async def action_reload_config(self) -> None
     async def action_cancel_all(self) -> None

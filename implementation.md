@@ -7,22 +7,25 @@ textual-cmdorc is a Textual-based Terminal User Interface (TUI) that acts as a f
 The TUI will:
 - Display commands in an indented hierarchy (e.g., Lint → Format → Tests, with "Another Command" as a root) using Tree for better interactivity and collapsibility.
 - Use CommandLink widgets for each command, showing status (e.g., spinner for running, icons for success/failed/cancelled).
+- **Show full trigger chain breadcrumbs** in tooltips (e.g., "py_file_changed → command_success:Lint → command_success:Format") extracted from cmdorc's `RunHandle.trigger_chain`.
+- **Support global keyboard shortcuts** (1-9 by default) configured in `[keyboard]` section of TOML to play/stop commands from anywhere.
 - Update statuses in real-time via cmdorc's lifecycle callbacks.
-- Allow manual run/stop via CommandLink's play/stop buttons.
+- Allow manual run/stop via CommandLink's play/stop buttons or keyboard shortcuts.
 - Handle automatic triggering, with the output file path set on the CommandLink for viewing results (latest run only).
 - Include a log pane for events/output snippets and an input for manual triggers.
 - Support file watching via watchdog to trigger events on file changes (e.g., "py_file_changed" on *.py modifications).
+- Show helpful hints in tooltips for unconfigured keyboard shortcuts.
 - Graceful shutdown on app close.
 
-This plan is for a junior developer: Step-by-step, with code snippets, testing, and rationale. Assume Python/Textual/async basics. Estimated effort: 25-45 hours.
+This plan is for a junior developer: Step-by-step, with code snippets, testing, and rationale. Assume Python/Textual/async basics. Estimated effort: 30-50 hours (updated to include trigger chains and keyboard features).
 
 ### Prerequisites
 - Python 3.10+.
 - Install: `pdm install` or `pip install textual textual-filelink cmdorc watchdog`.
 - Read:
-  - cmdorc: README.md and architecture.md.
-  - textual-filelink: README.md (focus on CommandLink API: constructor, set_status, set_output_path, events like PlayClicked).
-  - Textual docs: https://textual.textualize.io/ (widgets: Tree, Log, Input; events; workers for async).
+  - cmdorc: README.md and architecture.md. **NEW:** Understand `RunHandle.trigger_chain` property for breadcrumb display and `TriggerContext` for trigger tracking.
+  - textual-filelink: README.md (focus on CommandLink API: constructor, set_status, set_output_path, events like PlayClicked). **NEW:** Understand `action_play_stop()` method and BINDINGS customization for keyboard support.
+  - Textual docs: https://textual.textualize.io/ (widgets: Tree, Log, Input; events; on_key() handler for global keyboard; workers for async).
   - Watchdog docs: https://python-watchdog.readthedocs.io/ (focus on PollingObserver for cross-platform).
 
 ### Project Structure
@@ -69,6 +72,37 @@ test = ["pytest", "pytest-asyncio", "pytest-cov"]
 addopts = "--cov=src/textual_cmdorc --cov-report=term-missing --cov-fail-under=90"
 ```
 
+## Configuration Format with New Features
+
+### TOML Schema
+
+```toml
+# Keyboard shortcuts (NEW) - optional section
+[keyboard]
+shortcuts = { Lint = "1", Format = "2", Tests = "3", Build = "b" }
+enabled = true                    # optional, default true
+show_in_tooltips = true           # optional, default true
+
+# File watchers - optional, may appear multiple times
+[[file_watcher]]
+dir = "./src"
+patterns = ["**/*.py"]
+trigger = "py_file_changed"
+debounce_ms = 300
+
+# Commands - standard cmdorc format
+[[command]]
+name = "Lint"
+command = "ruff check --fix"
+triggers = ["py_file_changed"]
+```
+
+### Key Points:
+- `[keyboard]` section is optional. If missing, no keyboard shortcuts are configured (but app still works).
+- `shortcuts` is a dict mapping command names to keys (digits, letters, f-keys).
+- Duplicate keys will log warnings; last definition wins.
+- References to unknown commands will log warnings.
+
 ## Step-by-Step Implementation
 
 ### Step 1: Project Setup & Boilerplate (1-2 hours)
@@ -84,8 +118,37 @@ from cmdorc import RunState, CommandConfig
 
 @dataclass
 class TriggerSource:
-    name: str
+    name: str  # Last trigger in chain (backward compat)
     kind: Literal["manual", "file", "lifecycle"]
+    chain: list[str] = field(default_factory=list)  # NEW: Full trigger chain from cmdorc
+
+    @classmethod
+    def from_trigger_chain(cls, trigger_chain: list[str]) -> 'TriggerSource':
+        """Create from cmdorc's RunHandle.trigger_chain."""
+        if not trigger_chain:
+            return cls(name="manual", kind="manual", chain=[])
+        last_trigger = trigger_chain[-1]
+        kind = ("lifecycle" if last_trigger.startswith("command_")
+                else "file" if "file" in last_trigger.lower()
+                else "manual")
+        return cls(name=last_trigger, kind=kind, chain=trigger_chain)
+
+    def format_chain(self, separator: str = " → ", max_width: int | None = None) -> str:
+        """Format chain for display, with optional left truncation."""
+        if not self.chain:
+            return "manual"
+        full_chain = separator.join(self.chain)
+        if max_width and len(full_chain) > max_width:
+            keep_chars = max_width - 4
+            if keep_chars > 0:
+                return f"...{separator}{full_chain[-keep_chars:]}"
+        return full_chain
+
+@dataclass
+class KeyboardConfig:  # NEW
+    shortcuts: dict[str, str]  # command_name -> key
+    enabled: bool = True
+    show_in_tooltips: bool = True
 
 @dataclass
 class PresentationUpdate:
@@ -137,7 +200,7 @@ def setup_logging(level: int = logging.INFO) -> None:
 Rationale: Sets up PDM, shared models for reuse.
 
 ### Step 2: Shared Config Parsing (4-6 hours)
-- In `cmdorc_frontend/config.py`: Load TOML, build hierarchy, watchers.
+- In `cmdorc_frontend/config.py`: Load TOML, build hierarchy, parse keyboard config, parse watchers.
 ```python
 # src/cmdorc_frontend/config.py
 from typing import Dict, List, Tuple
@@ -146,14 +209,29 @@ import re
 import tomllib  # or tomli for <3.11
 import logging
 from cmdorc import load_config as load_cmdorc_config, RunnerConfig, CommandConfig
-from .models import CommandNode
+from .models import CommandNode, KeyboardConfig
 from .watchers import WatcherConfig
 
-def load_frontend_config(path: str | Path) -> Tuple[RunnerConfig, List[WatcherConfig], List[CommandNode]]:
+def load_frontend_config(path: str | Path) -> Tuple[RunnerConfig, KeyboardConfig, List[WatcherConfig], List[CommandNode]]:
     """Load configuration for any frontend."""
     path = Path(path)
     raw = tomllib.loads(path.read_text())
-    
+
+    # NEW: Parse keyboard config
+    keyboard_raw = raw.get("keyboard", {})
+    keyboard_config = KeyboardConfig(
+        shortcuts=keyboard_raw.get("shortcuts", {}),
+        enabled=keyboard_raw.get("enabled", True),
+        show_in_tooltips=keyboard_raw.get("show_in_tooltips", True),
+    )
+
+    # NEW: Validate keyboard config
+    key_to_commands = {}
+    for cmd_name, key in keyboard_config.shortcuts.items():
+        if key in key_to_commands:
+            logging.warning(f"Duplicate keyboard shortcut '{key}' for commands '{cmd_name}' and '{key_to_commands[key]}' - last one wins")
+        key_to_commands[key] = cmd_name
+
     # Parse watchers
     watchers = [
         WatcherConfig(
@@ -166,9 +244,15 @@ def load_frontend_config(path: str | Path) -> Tuple[RunnerConfig, List[WatcherCo
         )
         for w in raw.get("file_watcher", [])
     ]
-    
+
     # Use cmdorc's loader
     runner_config = load_cmdorc_config(path)
+
+    # NEW: Validate that shortcuts reference real commands
+    command_names = {c.name for c in runner_config.commands}
+    for cmd_name in keyboard_config.shortcuts:
+        if cmd_name not in command_names:
+            logging.warning(f"Keyboard shortcut defined for unknown command '{cmd_name}'")
     
     # Build hierarchy
     commands: Dict[str, CommandConfig] = {c.name: c for c in runner_config.commands}
@@ -209,11 +293,23 @@ def load_frontend_config(path: str | Path) -> Tuple[RunnerConfig, List[WatcherCo
                 roots.append(root_node)
                 visited.add(root_name)
     
-    return runner_config, watchers, roots
-```
-- Test: `test_config.py` – Use example config.toml, assert hierarchy, watchers.
+    return runner_config, keyboard_config, watchers, roots
 
-Rationale: Shared config logic for any frontend.
+def init_keyboard_config(runner_config: RunnerConfig, output_path: Path | None = None) -> str:
+    """NEW: Generate initial [keyboard] section with no-op placeholders."""
+    shortcuts = {cmd.name: f"<key{i+1}>" for i, cmd in enumerate(runner_config.commands)}
+    toml_content = "[keyboard]\n"
+    toml_content += "shortcuts = {\n"
+    for name, key in shortcuts.items():
+        toml_content += f'    "{name}" = "{key}",\n'
+    toml_content += "}\nenabled = true\n"
+    if output_path:
+        output_path.write_text(toml_content)
+    return toml_content
+```
+- Test: `test_config.py` – Use example config.toml, assert hierarchy, watchers, keyboard config parsing. Test init_keyboard_config() generation.
+
+Rationale: Shared config logic for any frontend. NEW: Keyboard config parsing + init helper for user convenience.
 
 ### Step 3: Shared State Manager (2-3 hours)
 - In `cmdorc_frontend/state_manager.py`: Reconciliation logic.
@@ -377,7 +473,7 @@ class WatchdogWatcher(TriggerSourceWatcher):
 Rationale: Concrete impl for TUI; follows shared protocol.
 
 ### Step 6: TUI Widgets (2-3 hours)
-- In `textual_cmdorc/widgets.py`: CmdorcCommandLink implementing CommandView.
+- In `textual_cmdorc/widgets.py`: CmdorcCommandLink implementing CommandView with trigger chain display.
 ```python
 # src/textual_cmdorc/widgets.py
 from textual_filelink import CommandLink
@@ -386,7 +482,7 @@ from cmdorc_frontend.state_manager import CommandView
 from cmdorc_frontend.models import TriggerSource, PresentationUpdate, map_run_state_to_icon
 
 class CmdorcCommandLink(CommandLink, CommandView):
-    def __init__(self, config: CommandConfig, **kwargs):
+    def __init__(self, config: CommandConfig, keyboard_shortcut: str | None = None, **kwargs):
         super().__init__(
             label=config.name,
             output_path=None,
@@ -398,7 +494,8 @@ class CmdorcCommandLink(CommandLink, CommandView):
             **kwargs
         )
         self.config = config
-        self.current_trigger: TriggerSource = TriggerSource("Idle", "manual")
+        self.current_trigger: TriggerSource = TriggerSource("Idle", "manual", chain=[])
+        self.keyboard_shortcut = keyboard_shortcut  # NEW
         self._update_tooltips()
 
     @property
@@ -420,7 +517,8 @@ class CmdorcCommandLink(CommandLink, CommandView):
 
     def update_from_run_result(self, result: RunResult, trigger_source: TriggerSource) -> None:
         icon = map_run_state_to_icon(result.state)
-        tooltip = f"{result.state.value} ({result.duration_str})"
+        chain_display = trigger_source.format_chain()  # NEW: Show full chain
+        tooltip = f"{result.state.value} ({result.duration_str})\nTrigger chain: {chain_display}"
         update = PresentationUpdate(icon=icon, running=(result.state == RunState.RUNNING), tooltip=tooltip, output_path=result.output if result.state in [RunState.SUCCESS, RunState.FAILED, RunState.CANCELLED] else None)
         self.apply_update(update)
         self.current_trigger = trigger_source
@@ -428,17 +526,27 @@ class CmdorcCommandLink(CommandLink, CommandView):
 
     def _update_tooltips(self) -> None:
         if self.is_running:
-            self.set_stop_tooltip(f"Stop — Running because: {self.current_trigger.name} ({self.current_trigger.kind})")
+            chain_display = self.current_trigger.format_chain()  # NEW
+            tooltip = f"Stop — Trigger chain: {chain_display}"
+            if self.keyboard_shortcut:  # NEW
+                tooltip = f"{tooltip}\n[{self.keyboard_shortcut}] to stop"
+            self.set_stop_tooltip(tooltip)
         else:
             triggers = ", ".join(self.config.triggers) or "none"
-            self.set_play_tooltip(f"Run (Triggers: {triggers} | manual)")
+            tooltip = f"Run (Triggers: {triggers} | manual)"
+            if self.keyboard_shortcut:  # NEW
+                tooltip = f"{tooltip}\n[{self.keyboard_shortcut}] to run"
+            else:
+                # NEW: Show hint for unconfigured shortcuts
+                tooltip = f"{tooltip}\nSet hotkey with {self.config.name} = '<key>' in [keyboard] shortcuts"
+            self.set_play_tooltip(tooltip)
 ```
-- Test: `test_widgets.py` – Create link, call update_from_run_result, assert tooltips/status set.
+- Test: `test_widgets.py` – Create link, call update_from_run_result with trigger chain, assert tooltips show chain and shortcuts.
 
-Rationale: Adds dynamic tooltips with triggers; handles output path.
+Rationale: NEW: Adds trigger chain display and keyboard shortcut hints; handles output path.
 
-### Step 6: TUI Integrator (2-3 hours)
-- In `textual_cmdorc/integrator.py`: TUI-specific wiring.
+### Step 7: TUI Integrator (2-3 hours)
+- In `textual_cmdorc/integrator.py`: TUI-specific wiring with trigger chain extraction.
 ```python
 # src/textual_cmdorc/integrator.py
 from typing import Callable
@@ -452,49 +560,147 @@ import logging
 def create_command_link(
     node: CommandNode,
     orchestrator: CommandOrchestrator,
-    on_status_change: Callable[[RunState, RunResult], None] | None = None
+    on_status_change: Callable[[RunState, RunResult], None] | None = None,
+    keyboard_shortcut: str | None = None  # NEW
 ) -> CmdorcCommandLink:
-    link = CmdorcCommandLink(node.config)
-    
-    def update_from_result(result: RunResult, context=None):
-        source_name = context.get('trigger', 'manual') if context else 'manual'
-        kind = "lifecycle" if "command_" in source_name else ("file" if "file" in source_name else "manual")
-        trigger_source = TriggerSource(source_name, kind)
+    link = CmdorcCommandLink(node.config, keyboard_shortcut=keyboard_shortcut)  # NEW
+
+    def update_from_result(handle: RunHandle, context=None):
+        result = handle._result
+
+        # NEW: Extract full trigger chain from RunHandle
+        trigger_chain = handle.trigger_chain if hasattr(handle, 'trigger_chain') else []
+        trigger_source = TriggerSource.from_trigger_chain(trigger_chain)
+
         link.update_from_run_result(result, trigger_source)
         if on_status_change:
             on_status_change(result.state, result)
-        logging.debug(f"Updated {node.name} to {result.state.value}")
-    
-    # Wire callbacks
+        logging.debug(f"Updated {node.name} to {result.state.value} (chain: {trigger_source.format_chain()})")
+
+    # Wire callbacks - pass RunHandle to extract trigger_chain
     orchestrator.set_lifecycle_callback(
         node.name,
-        on_success=lambda h, ctx: update_from_result(h._result, ctx),
-        on_failed=lambda h, ctx: update_from_result(h._result, ctx),
-        on_cancelled=lambda h, ctx: update_from_result(h._result, ctx)
+        on_success=update_from_result,
+        on_failed=update_from_result,
+        on_cancelled=update_from_result
     )
     orchestrator.on_event(
         f"command_started:{node.name}",
-        lambda h, ctx: update_from_result(h._result, ctx) if h else None
+        lambda h, ctx: update_from_result(h) if h else None
     )
-    
+
     return link
 ```
-- Test: `test_integrator.py` – Mock orchestrator/context, create link, simulate callbacks, assert update called with source.
+- Test: `test_integrator.py` – Mock RunHandle with trigger_chain, create link, simulate callbacks, assert update called with full trigger chain.
 
-Rationale: Wires tooltips with trigger context from TriggerContext.
+Rationale: NEW: Wires tooltips with full trigger chains from cmdorc's RunHandle.trigger_chain property.
 
-### Step 7: Tests & Coverage Enforcement (5-8 hours)
+### Step 7: TUI App Global Keyboard Handler (2-3 hours)
+- In `textual_cmdorc/app.py`: Add on_key() handler for global keyboard shortcuts.
+```python
+# In CmdorcApp.__init__
+def __init__(self, config_path: str = "config.toml", **kwargs):
+    super().__init__(**kwargs)
+    setup_logging()
+
+    # NEW: Load with keyboard config
+    runner_config, self.keyboard_config, watchers, self.hierarchy = load_frontend_config(config_path)
+    self.orchestrator = CommandOrchestrator(runner_config)
+
+    # NEW: Build key -> command_name lookup
+    self.key_to_command: Dict[str, str] = {}
+    if self.keyboard_config.enabled:
+        self.key_to_command = {
+            key: cmd_name
+            for cmd_name, key in self.keyboard_config.shortcuts.items()
+        }
+
+# NEW: Global keyboard handler
+def on_key(self, event: Key) -> None:
+    """Handle global keyboard shortcuts for commands."""
+    if not self.keyboard_config.enabled:
+        return
+
+    key = event.key
+
+    if key in self.key_to_command:
+        command_name = self.key_to_command[key]
+
+        # Find widget for this command
+        command_links = list(self.query(CmdorcCommandLink))
+        target_link = None
+        for link in command_links:
+            if link.config.name == command_name:
+                target_link = link
+                break
+
+        if target_link:
+            # Use smart action that handles running/stopped state
+            target_link.action_play_stop()
+            event.prevent_default()
+            event.stop()
+
+            # Optional: Log to log pane
+            if hasattr(self, 'log_pane'):
+                self.log_pane.write_line(f"[{key}] triggered: {command_name}")
+        else:
+            # NEW: Write to log pane for better user feedback
+            if hasattr(self, 'log_pane'):
+                self.log_pane.write_line(f"⚠️ Shortcut [{key}] ignored: Command '{command_name}' not found in tree")
+            logging.warning(f"Shortcut '{key}' -> '{command_name}' but widget not found")
+
+# In build_command_tree() method
+def build_command_tree(self, tree: Tree, nodes: list[CommandNode], parent=None):
+    for node in nodes:
+        # Get keyboard shortcut for this command
+        shortcut = self.keyboard_config.shortcuts.get(node.name) if self.keyboard_config.enabled else None
+
+        # Create link with shortcut
+        link = create_command_link(node, self.orchestrator, self.on_global_status_change, keyboard_shortcut=shortcut)
+        link._update_tooltips()  # Refresh tooltips
+
+        # Add to tree
+        if parent is None:
+            tree_node = tree.root.add(link)
+        else:
+            tree_node = parent.add(link)
+
+        # Recursively add children
+        if node.children:
+            self.build_command_tree(tree, node.children, tree_node)
+```
+- Test: `test_app.py` – Create app, press keys, assert commands triggered. Test keyboard_config disabling.
+
+Rationale: NEW: Global keyboard shortcuts integrate textual-filelink's action_play_stop() with app-level key handling.
+
+### Step 8: Tests & Coverage Enforcement (5-8 hours)
 - Achieve ≥90% coverage: Unit for pure logic, integration for app.
 - Errors: Catch/log (e.g., invalid paths, concurrency limits).
 - CI: Update ci.yml with `--cov-fail-under=90`.
 
 Rationale: Enforces quality.
 
-### Step 8: Documentation & Examples (2-4 hours)
-- Update README.md with skeletal content: Features, install, quick start.
-- Add examples/config.toml with [[file_watcher]].
+### Step 9: Documentation & Examples (2-4 hours)
+- Update README.md with features, install, quick start. **NEW:** Include keyboard shortcuts and trigger chains features. Show `cmdorc init` command.
+- Add examples/config.toml with `[keyboard]` section, `[[file_watcher]]` section, and sample commands.
+- Update architecture.md with new features.
+
+## Summary of New Features
+
+This implementation adds two major features to textual-cmdorc:
+
+1. **Trigger Chain Breadcrumbs (Breadcrumb Display):**
+   - Captures full trigger chain from `RunHandle.trigger_chain`
+   - Displays in tooltips: "py_file_changed → command_success:Lint → command_success:Format"
+   - Supports optional left truncation if chain is too long
+
+2. **Global Keyboard Shortcuts:**
+   - Configurable in `[keyboard]` section of TOML config
+   - Default to number keys 1-9, but customizable to any key
+   - Show hints in tooltips for unconfigured commands
+   - Work from anywhere in the app (global, not just when focused)
 
 ## Next Steps
 - Commit per step.
 - Run `pdm run ruff check . && pdm run pytest`.
-- Questions? Refer to tc_architecture.md or ask senior.
+- Questions? Refer to architecture.md or implementation.md.
