@@ -125,6 +125,7 @@ class CmdorcCommandLink(CommandLink):
 ```
 
 Trigger source is captured in the `on_event` callback using `TriggerContext` (cmdorc passes it on lifecycle events).
+See cmdorc's TriggerContext in [cmdorc architecture.md](https://github.com/eyecantell/cmdorc/blob/main/architecture.md) for details on passed context.
 
 ---
 
