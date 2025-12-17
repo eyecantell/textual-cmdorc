@@ -129,9 +129,21 @@ This enables both standalone TUI and embedding in larger applications.
 
 ---
 
-## Phase 0: Embeddable Architecture (FOUNDATIONAL)
+## Phase 0: Embeddable Architecture (FOUNDATIONAL - 6-8 HOURS)
 
 This phase establishes the foundational architecture that enables the project to work both standalone and embedded. **Complete this phase before starting other features.**
+
+**Critical Fixes Integrated:**
+- FIX #1: Sync-safe async API (store `_loop`, use `self._loop.create_task()`)
+- FIX #2: Duplicate tracking in view (`_command_links` as dict[str, list[...]])
+- FIX #3: Keyboard conflicts cached property (computed once in `__init__()`)
+- FIX #5: Watcher threading safety with `call_soon_threadsafe()`
+- FIX #6: Help screen as ModalScreen with `h` footer binding
+- RECOMMENDATION #1: Idempotent `attach()` with loop validation
+- RECOMMENDATION #2: Stable public API explicitly documented
+- RECOMMENDATION #3: Centralized validation results in controller
+- POLISH #1: `keyboard_hints` metadata-only (not bindings)
+- POLISH #3: Default notifier is NoOpNotifier (silent for embedded mode)
 
 ### Phase 0, Step 1: Create CmdorcNotifier Protocol & Implementations (30 min)
 
@@ -202,17 +214,27 @@ Create `src/textual_cmdorc/controller.py`:
 ```python
 # src/textual_cmdorc/controller.py
 import asyncio
+import logging
 from pathlib import Path
 from typing import Callable, Optional
 from cmdorc import CommandOrchestrator
 from cmdorc_frontend.config import load_frontend_config
 from cmdorc_frontend.models import TriggerSource, CommandNode
-from cmdorc_frontend.notifier import CmdorcNotifier, LoggingNotifier
+from cmdorc_frontend.notifier import CmdorcNotifier, NoOpNotifier
 from textual_cmdorc.file_watcher import WatchdogWatcher
+
+logger = logging.getLogger(__name__)
 
 
 class CmdorcController:
-    """Non-Textual controller for orchestration logic. Primary embed point."""
+    """Non-Textual controller for orchestration logic. Primary embed point.
+
+    RECOMMENDATION #2: Stable Public API for v0.1
+    ============================================
+    Stable methods: attach(), detach(), request_run(), request_cancel(),
+    run_command(), cancel_command(), keyboard_hints, keyboard_conflicts.
+    Internal methods (_on_file_change, etc.) may change.
+    """
 
     def __init__(
         self,
@@ -224,13 +246,13 @@ class CmdorcController:
 
         Args:
             config_path: Path to TOML config
-            notifier: Optional notification handler (defaults to LoggingNotifier)
+            notifier: Optional notification handler (defaults to NoOpNotifier - silent)
             enable_watchers: If True, watchers auto-start on attach(). If False, host controls lifecycle.
         """
         self.config_path = Path(config_path)
-        self.notifier = notifier or LoggingNotifier()
-        self._enable_watchers = enable_watchers
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self.notifier = notifier or NoOpNotifier()  # POLISH #3: Silent by default
+        self.enable_watchers = enable_watchers
+        self._loop: Optional[asyncio.AbstractEventLoop] = None  # FIX #1: Store loop reference
         self._file_watcher: Optional[WatchdogWatcher] = None
 
         # Load configuration
@@ -244,22 +266,47 @@ class CmdorcController:
         # Initialize orchestrator
         self.orchestrator = CommandOrchestrator(self.runner_config)
 
+        # FIX #3: Cache keyboard conflicts (computed once)
+        self._keyboard_conflicts = self._compute_keyboard_conflicts()
+
         # Outbound events (host wires these)
         self.on_command_started: Callable[[str, TriggerSource], None] | None = None
         self.on_command_finished: Callable[[str, object], None] | None = None
         self.on_validation_result: Callable[[dict], None] | None = None
+        self.on_state_reconciled: Callable[[str, object], None] | None = None  # FIX #6
 
         # Intent signals
         self.on_quit_requested: Callable[[], None] | None = None
         self.on_cancel_all_requested: Callable[[], None] | None = None
 
-        self.notifier.info(f"Controller initialized with config: {self.config_path}")
+    def _compute_keyboard_conflicts(self) -> dict[str, list[str]]:
+        """FIX #3: Compute keyboard conflicts once during init."""
+        conflicts = {}
+        for cmd_name, key in self.keyboard_config.shortcuts.items():
+            if key not in conflicts:
+                conflicts[key] = []
+            conflicts[key].append(cmd_name)
+        # Return only keys with multiple commands
+        return {k: v for k, v in conflicts.items() if len(v) > 1}
 
     def attach(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Attach to event loop and start watchers if enabled."""
-        self._loop = loop
+        """Attach to event loop and start watchers if enabled.
 
-        if self._enable_watchers and self.watcher_configs:
+        RECOMMENDATION #1: Idempotent - guards against double-attach and non-running loop.
+        FIX #1: Store loop reference for sync-safe task creation.
+        """
+        # RECOMMENDATION #1: Idempotency guard
+        if self._loop is not None:
+            return  # Already attached
+
+        # RECOMMENDATION #1: Validate loop is running
+        if not loop.is_running():
+            raise RuntimeError("Event loop must be running before attach(). "
+                             "Call attach() from within on_mount() or after loop started.")
+
+        self._loop = loop  # FIX #1: Store for request_run/cancel
+
+        if self.enable_watchers and self.watcher_configs:
             self._file_watcher = WatchdogWatcher(self.orchestrator, loop)
             for cfg in self.watcher_configs:
                 self._file_watcher.add_watch(cfg)
@@ -271,23 +318,22 @@ class CmdorcController:
         if self._file_watcher:
             self._file_watcher.stop()
             self._file_watcher = None
-            self.notifier.info("File watchers stopped")
+        self._loop = None
+        self.notifier.info("File watchers stopped")
 
     async def run_command(self, name: str) -> None:
-        """Run a command by name."""
+        """Run a command by name (async)."""
         if not self.orchestrator.has_command(name):
             self.notifier.warning(f"Command not found: {name}")
             return
-
         await self.orchestrator.run_command(name)
         self.notifier.info(f"Started: {name}")
 
     async def cancel_command(self, name: str) -> None:
-        """Cancel a running command."""
+        """Cancel a running command (async)."""
         if not self.orchestrator.has_command(name):
             self.notifier.warning(f"Command not found: {name}")
             return
-
         await self.orchestrator.cancel_command(name)
         self.notifier.info(f"Cancelled: {name}")
 
@@ -300,22 +346,68 @@ class CmdorcController:
                 self.watcher_configs,
                 self.hierarchy
             ) = load_frontend_config(self.config_path)
+            # FIX #3: Recompute conflicts after reload
+            self._keyboard_conflicts = self._compute_keyboard_conflicts()
             self.notifier.info("Configuration reloaded")
         except Exception as e:
             self.notifier.error(f"Failed to reload config: {e}")
 
-    @property
-    def keyboard_bindings(self) -> dict[str, tuple[str, Callable]]:
-        """Keyboard shortcuts as metadata for host to optionally bind."""
-        if not self.keyboard_config.enabled:
-            return {}
+    # FIX #1: Sync-safe helpers for UI integration
+    def request_run(self, name: str) -> None:
+        """Request command run (sync-safe, schedules async task).
 
-        bindings = {}
-        for cmd_name, key in self.keyboard_config.shortcuts.items():
-            async def cmd_callback(name=cmd_name):
-                await self.run_command(name)
-            bindings[key] = (cmd_name, cmd_callback)
-        return bindings
+        FIX #1: Uses stored loop reference instead of asyncio.create_task().
+        Safe to call from sync contexts (e.g., keyboard event handlers).
+        """
+        if self._loop is None:
+            raise RuntimeError("Controller not attached to event loop. Call attach() first.")
+        self._loop.create_task(self.run_command(name))
+
+    def request_cancel(self, name: str) -> None:
+        """Request command cancellation (sync-safe, schedules async task).
+
+        FIX #1: Uses stored loop reference instead of asyncio.create_task().
+        Safe to call from sync contexts (e.g., keyboard event handlers).
+        """
+        if self._loop is None:
+            raise RuntimeError("Controller not attached to event loop. Call attach() first.")
+        self._loop.create_task(self.cancel_command(name))
+
+    # FIX #5: Thread-safe file change handler
+    def _on_file_change(self, trigger_name: str) -> None:
+        """Handle file change events from watcher thread.
+
+        FIX #5: Uses call_soon_threadsafe to schedule async task from watcher thread.
+        """
+        if self._loop is None:
+            logger.warning(f"File change for '{trigger_name}' ignored - controller not attached")
+            return
+        # FIX #5: Thread-safe task scheduling
+        self._loop.call_soon_threadsafe(
+            lambda: self._loop.create_task(self.run_command(trigger_name))
+        )
+
+    # POLISH #1: Metadata only (no callables)
+    @property
+    def keyboard_hints(self) -> dict[str, str]:
+        """Returns {key: command_name} metadata for host to wire.
+
+        POLISH #1: Returns metadata only (no callables) to decouple host from controller internals.
+        Host wires own actions: self.bind(key, lambda: controller.request_run(name))
+        """
+        return {
+            key: cmd_name
+            for cmd_name, key in self.keyboard_config.shortcuts.items()
+        }
+
+    # FIX #3: Cached keyboard conflicts
+    @property
+    def keyboard_conflicts(self) -> dict[str, list[str]]:
+        """FIX #3: Returns {key: [cmd_name1, cmd_name2, ...]} for keys with multiple commands.
+
+        Cached in __init__() to avoid recomputation on every access.
+        """
+        return self._keyboard_conflicts
 ```
 
 ### Phase 0, Step 3: Create CmdorcView Widget (1 hour)
@@ -353,7 +445,8 @@ class CmdorcView(Widget):
         self.controller = controller
         self.show_log_pane = show_log_pane
         self.enable_local_bindings = enable_local_bindings
-        self._command_links = {}  # Map command name -> CmdorcCommandLink
+        # FIX #2: Track all instances of each command to detect duplicates
+        self._command_links: dict[str, list[CmdorcCommandLink]] = {}
 
     def compose(self):
         """Compose tree and optional log pane."""
@@ -371,18 +464,41 @@ class CmdorcView(Widget):
         self._build_tree(tree, self.controller.hierarchy)
 
     def _build_tree(self, tree, nodes, parent=None):
-        """Recursively build tree from CommandNode hierarchy."""
+        """Recursively build tree from CommandNode hierarchy.
+
+        FIX #2: Tracks command occurrences to detect duplicates and mark them.
+        """
         from textual_cmdorc.integrator import create_command_link
 
         for node in nodes:
-            link = create_command_link(node, self.controller.orchestrator)
-            self._command_links[node.name] = link
+            # Get keyboard shortcut for this command
+            shortcut = (self.controller.keyboard_config.shortcuts.get(node.name)
+                       if self.controller.keyboard_config.enabled else None)
 
+            # FIX #2: Detect if this is a duplicate (appeared before)
+            occurrence_count = len(self._command_links.get(node.name, []))
+            is_duplicate = occurrence_count > 0
+
+            # Create link with shortcut and duplicate indicator
+            link = create_command_link(node, self.controller.orchestrator,
+                                      keyboard_shortcut=shortcut)
+            link.is_duplicate = is_duplicate  # FIX #2: Mark duplicates
+
+            # FIX #2: Store all instances of this command
+            if node.name not in self._command_links:
+                self._command_links[node.name] = []
+            self._command_links[node.name].append(link)
+
+            # Refresh tooltips to reflect duplicate status
+            link._update_tooltips()
+
+            # Add to tree
             if parent is None:
                 tree.root.add(link)
             else:
                 parent.add(link)
 
+            # Recursively add children
             if node.children:
                 self._build_tree(tree, node.children, link)
 
@@ -520,20 +636,44 @@ triggers = []
     assert bindings["1"][0] == "Test"
 ```
 
-**Summary of Phase 0:**
+**Summary of Phase 0 (COMPLETE - 6-8 HOURS):**
 
 After this phase, you have:
-- Non-Textual controller that can be used programmatically
-- Passive view widget suitable for embedding
-- Standalone app that composes them for TUI mode
-- Pluggable notifier for custom logging
-- Full architecture enabling both embedded and standalone usage
+- ✅ Non-Textual controller that can be used programmatically
+- ✅ Passive view widget suitable for embedding
+- ✅ Standalone app that composes them for TUI mode
+- ✅ Pluggable notifier for custom logging (POLISH #3: silent by default)
+- ✅ Full architecture enabling both embedded and standalone usage
 
-You're now ready for Phases 1-7, which add features while maintaining this architecture.
+**All Critical Fixes Applied:**
+- ✅ **FIX #1**: Sync-safe intent methods (`request_run`, `request_cancel`) using stored `_loop`
+- ✅ **FIX #2**: Duplicate tracking in view using `dict[str, list[CmdorcCommandLink]]`
+- ✅ **FIX #3**: Keyboard conflicts cached property computed once in `__init__()`
+- ✅ **FIX #5**: Watcher threading safety using `call_soon_threadsafe()`
+- ✅ **FIX #6**: Help screen with ModalScreen and `h` footer binding (Phase 6)
+- ✅ **RECOMMENDATION #1**: Idempotent `attach()` with loop validation
+- ✅ **RECOMMENDATION #2**: Stable public API documented in controller docstring
+- ✅ **RECOMMENDATION #3**: Validation centralized in controller
+- ✅ **POLISH #1**: `keyboard_hints` metadata-only (not bindings)
+- ✅ **POLISH #3**: Default notifier is NoOpNotifier (silent)
+
+**Anti-Patterns to Avoid (FIX #7 - Design Principles):**
+- ❌ Do not bind global keys inside the controller
+- ❌ Do not call `exit()` or `app.exit()` from controller
+- ❌ Do not poll orchestrator state (use callbacks only)
+- ❌ Do not make controller depend on Textual
+- ❌ Do not auto-start watchers without checking `enable_watchers`
+
+You're now ready for Phases 1-7, which add features while maintaining this embedding-first architecture.
 
 ---
 
 ## Phase 1: Configuration & Model Enhancement (2-3 hours)
+
+**Critical Fixes in Phase 1:**
+- **FIX #4**: TriggerSource adapter pattern (keeps models UI-agnostic)
+- **FIX #7**: Tooltip truncation min width check (10 chars)
+- **FIX #8**: Key validation against VALID_KEYS set
 
 ### Phase 1, Step 1: Project Setup & Boilerplate (1-2 hours)
 - Create structure as above.

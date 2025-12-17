@@ -91,6 +91,47 @@ pdm add textual-cmdorc
 - Python 3.10+
 - `watchdog` package (required for file watching features)
 
+## Migration Guide (v0.1)
+
+If you're upgrading to v0.1, the architecture has been redesigned to support embedding. Here's what changed:
+
+### For Standalone Users (No Changes Required)
+If you're only using `CmdorcApp` as a standalone TUI:
+```python
+from textual_cmdorc import CmdorcApp
+app = CmdorcApp(config_path="config.toml")
+app.run()
+```
+Everything works the same way. No changes needed!
+
+### For Host Applications (New Embedding Support)
+If you want to embed textual-cmdorc in a larger TUI:
+```python
+from textual_cmdorc import CmdorcController, CmdorcView
+from textual.app import App
+
+class MyLargerApp(App):
+    def compose(self):
+        # Create and own the controller
+        self.cmdorc = CmdorcController("config.toml", enable_watchers=False)
+        yield CmdorcView(self.cmdorc, show_log_pane=False)
+
+    def on_mount(self):
+        # Host controls when to attach to event loop
+        import asyncio
+        self.cmdorc.attach(asyncio.get_running_loop())
+```
+
+### What's New in v0.1
+- **Embeddable Architecture**: Use as a widget in larger TUIs
+- **Semantic Trigger Summaries**: Tooltips show "Ran automatically (file change)" before technical details
+- **Startup Validation**: Config issues shown immediately on app start
+- **Duplicate Indicators**: Visual (↳) suffix when commands appear multiple times
+- **Help Screen**: Press `h` to see keyboard shortcuts and conflicts
+- **Stable Public API**: Controller API frozen for v0.1, safe for embedding
+
+See [architecture.md](architecture.md#65-embedding-architecture--contracts) for detailed embedding contracts.
+
 ## Quick Start
 1. Initialize a config (optional):
    ```bash

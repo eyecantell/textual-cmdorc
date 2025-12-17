@@ -316,7 +316,19 @@ debounce_ms = 300                # optional, default 300
 ### `src/textual_cmdorc/controller.py` (NEW - Primary Embed Point)
 ```python
 class CmdorcController:
-    """Non-Textual controller for orchestration logic. Primary embed point."""
+    """Non-Textual controller for orchestration logic. Primary embed point.
+
+    RECOMMENDATION #2: Stable Public API for v0.1
+    ============================================
+    The following methods and properties are stable for v0.1:
+    - Lifecycle: attach(), detach()
+    - Command control: request_run(), request_cancel(), run_command(), cancel_command()
+    - Keyboard metadata: keyboard_hints, keyboard_conflicts
+    - Outbound events: on_command_started, on_command_finished, on_state_reconciled, etc.
+    - Read-only access: orchestrator, hierarchy
+
+    Internal methods (_on_file_change, etc.) may change.
+    """
 
     def __init__(
         self,
@@ -328,41 +340,70 @@ class CmdorcController:
 
         Args:
             config_path: Path to TOML config
-            notifier: Optional notification handler (defaults to LoggingNotifier)
+            notifier: Optional notification handler (defaults to NoOpNotifier - silent for embedded mode)
             enable_watchers: If True, watchers auto-start on attach(). If False, host controls lifecycle.
         """
 
     # Lifecycle
     def attach(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Attach to event loop and start watchers if enabled."""
+        """Attach to event loop and start watchers if enabled.
+
+        FIX #1: Store loop reference for sync-safe task creation.
+        RECOMMENDATION #1: Idempotent - guards against double-attach and non-running loop.
+        """
 
     def detach(self) -> None:
         """Stop watchers and cleanup."""
 
-    # Command control
+    # Command control (async)
     async def run_command(self, name: str) -> None:
-        """Run a command by name."""
+        """Run a command by name (async)."""
 
     async def cancel_command(self, name: str) -> None:
-        """Cancel a running command."""
+        """Cancel a running command (async)."""
 
     async def reload_config(self) -> None:
         """Reload configuration file."""
 
-    # Keyboard metadata (not actual bindings - host decides binding strategy)
+    # Command control (sync-safe helpers) - FIX #1
+    def request_run(self, name: str) -> None:
+        """Request command run (sync-safe, schedules async task).
+
+        FIX #1: Uses stored loop reference instead of asyncio.create_task().
+        """
+
+    def request_cancel(self, name: str) -> None:
+        """Request command cancellation (sync-safe, schedules async task).
+
+        FIX #1: Uses stored loop reference instead of asyncio.create_task().
+        """
+
+    # Keyboard metadata (metadata only, NOT bindings) - POLISH #1
     @property
-    def keyboard_bindings(self) -> dict[str, tuple[str, Callable]]:
-        """Returns {key: (command_name, callback)} for host to optionally bind."""
+    def keyboard_hints(self) -> dict[str, str]:
+        """Returns {key: command_name} metadata for host to wire.
+
+        POLISH #1: Returns metadata only (no callables) to decouple host from controller internals.
+        Host wires own actions: self.bind(key, lambda: controller.request_run(name))
+        """
+
+    @property
+    def keyboard_conflicts(self) -> dict[str, list[str]]:
+        """FIX #3: Returns {key: [cmd_name1, cmd_name2, ...]} for keys with multiple commands.
+
+        Cached in __init__() to avoid recomputation on every access.
+        """
 
     @property
     def keyboard_help(self) -> list[KeyboardHint]:
-        """Keyboard shortcut hints for display in help screen."""
+        """Keyboard shortcut hints for display."""
 
     # Outbound events (host wires these to its own actions)
     on_command_started: Callable[[str, TriggerSource], None] | None = None
     on_command_finished: Callable[[str, RunResult], None] | None = None
     on_trigger_fired: Callable[[str, str], None] | None = None  # (trigger_name, source)
     on_validation_result: Callable[[ConfigValidationResult], None] | None = None
+    on_state_reconciled: Callable[[str, RunState], None] | None = None  # FIX #6: (command_name, state)
 
     # Intent signals (for actions that affect host)
     on_quit_requested: Callable[[], None] | None = None
@@ -376,6 +417,13 @@ class CmdorcController:
     @property
     def hierarchy(self) -> list[CommandNode]:
         """Command hierarchy for rendering."""
+
+    # Internal threading safety
+    def _on_file_change(self, trigger_name: str) -> None:
+        """Handle file change events from watcher thread.
+
+        FIX #5: Uses call_soon_threadsafe to schedule async task from watcher thread.
+        """
 ```
 
 ### `src/textual_cmdorc/view.py` (NEW - Passive Rendering Widget)
@@ -397,12 +445,21 @@ class CmdorcView(Widget):
             enable_local_bindings: If True, handle keyboard when focused (standalone only)
         """
 
+    # FIX #2: Duplicate tracking
+    _command_links: dict[str, list[CmdorcCommandLink]]  # Track all instances per command name
+
     # View updates driven by controller callbacks
     def refresh_tree(self) -> None:
         """Rebuild tree from controller.hierarchy."""
 
     def update_command(self, name: str, update: PresentationUpdate) -> None:
         """Update display of specific command."""
+
+    def build_command_tree(self, tree: Tree, nodes: list[CommandNode], parent=None) -> None:
+        """Build tree from hierarchy, tracking duplicate command occurrences.
+
+        FIX #2: Detects when commands appear multiple times in tree and marks them.
+        """
 ```
 
 ### `src/cmdorc_frontend/notifier.py` (NEW - Pluggable Logging)
@@ -456,33 +513,64 @@ class KeyboardConfig:
 class CommandNode:
     config: CommandConfig
     children: list['CommandNode'] | None = None
-    
+
 @dataclass
 class TriggerSource:
     name: str  # Last trigger in chain (backward compat)
     kind: Literal["manual", "file", "lifecycle"]
-    chain: list[str]  # NEW: Full trigger chain from cmdorc
+    chain: list[str]  # Full trigger chain from cmdorc
 
     @classmethod
-    def from_trigger_chain(cls, trigger_chain: list[str]) -> 'TriggerSource': ...
+    def from_trigger_chain(cls, trigger_chain: list[str]) -> 'TriggerSource':
+        """Create from cmdorc's RunHandle.trigger_chain."""
 
     def get_semantic_summary(self) -> str:
-        """NEW: Get human-readable summary of trigger source.
+        """Get human-readable summary of trigger source.
 
         Returns:
             "Ran manually" / "Ran automatically (file change)" / "Ran automatically (triggered by another command)"
         """
-        ...
 
-    def format_chain(self, separator: str = " → ", max_width: int | None = None) -> str:
-        """Format chain for display, with optional left truncation.""" ...
+    def format_chain(self, separator: str = " → ", max_width: int = 80) -> str:
+        """Format chain for display, with optional left truncation.
+
+        FIX #7: Minimum width check (10 chars) prevents negative keep_chars.
+        """
 
 @dataclass
 class PresentationUpdate:
     icon: str
     running: bool
     tooltip: str
-    output_path: Path | None
+    output_path: Path | None = None
+
+@dataclass
+class ConfigValidationResult:
+    """Results from startup config validation.
+
+    RECOMMENDATION #3: Built by controller, consumed by app for display only.
+    """
+    commands_loaded: int = 0
+    watchers_active: int = 0
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+@dataclass
+class KeyboardConfig:
+    """Keyboard shortcut configuration.
+
+    FIX #8: Shortcuts validated against VALID_KEYS set (1-9, a-z, f1-f12).
+    """
+    shortcuts: dict[str, str]  # command_name -> key
+    enabled: bool = True
+    show_in_tooltips: bool = True
+
+# FIX #8: Valid keyboard keys
+VALID_KEYS = set(
+    [str(i) for i in range(1, 10)]  # 1-9
+    + [chr(i) for i in range(ord('a'), ord('z') + 1)]  # a-z
+    + [f"f{i}" for i in range(1, 13)]  # f1-f12
+)
 
 def map_run_state_to_icon(state: RunState) -> str:
     """Map RunState to icon string."""
@@ -533,12 +621,30 @@ class CmdorcCommandLink(CommandLink, CommandView):
     config: CommandConfig
     current_trigger: TriggerSource = TriggerSource("Idle", "manual", chain=[])
     keyboard_shortcut: str | None = None  # NEW: Configured shortcut key (e.g., "1", "b")
-    is_duplicate: bool = False  # NEW: True if command appears multiple times in tree
+    is_duplicate: bool = False  # FIX #2: True if command appears multiple times in tree
 
-    def set_running(self, running: bool, tooltip: str) -> None
-    def set_result(self, icon: str, tooltip: str, output_path: Path | None) -> None
-    def apply_update(self, update: PresentationUpdate) -> None
-    def _update_tooltips(self) -> None  # NEW: Shows semantic summary, chain, shortcut hint, duplicate indicator
+    def set_running(self, running: bool, tooltip: str) -> None:
+        """Update running state."""
+
+    def set_result(self, icon: str, tooltip: str, output_path: Path | None) -> None:
+        """Update result display."""
+
+    def apply_update(self, update: PresentationUpdate) -> None:
+        """Apply presentation update."""
+
+    def _update_tooltips(self) -> None:
+        """Update tooltips with semantic summary, chain, shortcut hint, duplicate indicator.
+
+        FIX #7: Minimum width check (10 chars) prevents negative keep_chars.
+        POLISH #4: Clarify duplicate shortcut behavior.
+        """
+
+    # NEW: Enhanced tooltip display
+    # Shows in order:
+    # 1. Semantic summary (e.g., "Ran automatically (file change)")
+    # 2. Full trigger chain (e.g., "py_file_changed → command_success:Lint")
+    # 3. Keyboard hint (e.g., "[1] to stop")
+    # 4. Duplicate indicator (e.g., "(Appears in multiple workflows)")
 ```
 
 ### `src/textual_cmdorc/integrator.py`
@@ -553,23 +659,58 @@ def create_command_link(
 
 ### `src/textual_cmdorc/app.py` (REFACTORED - Thin Shell for Standalone Mode)
 ```python
+class HelpScreen(ModalScreen):
+    """Modal help screen showing keyboard shortcuts and conflicts.
+
+    FIX #6: Use ModalScreen instead of log pane for help.
+    """
+    BINDINGS = [("escape", "dismiss", "Close")]
+
+    def __init__(self, keyboard_config: KeyboardConfig):
+        super().__init__()
+        self.keyboard_config = keyboard_config
+
+    def compose(self) -> ComposeResult:
+        """Compose help content with keyboard shortcuts and app shortcuts."""
+        # Shows keyboard shortcuts with conflict highlighting
+        # Documents duplicate command behavior
+        ...
+
 class CmdorcApp(App):
     """Thin shell composing CmdorcController + CmdorcView for standalone mode.
 
     Not embeddable. For embedding, use CmdorcController + CmdorcView directly.
+
+    Design Principles (Anti-patterns to avoid - FIX #7):
+    - ❌ Do not bind global keys inside the controller
+    - ❌ Do not call `exit()` or `app.exit()` from controller
+    - ❌ Do not poll orchestrator state (use callbacks only)
+    - ❌ Do not make controller depend on Textual
+    - ❌ Do not auto-start watchers without checking `enable_watchers`
     """
 
     controller: CmdorcController  # Non-Textual orchestration logic
     view: CmdorcView  # Passive Textual widget
 
+    BINDINGS = [
+        ("h", "show_help", "Help"),  # FIX #6: Add to footer for discoverability
+        ("r", "reload_config", "Reload"),
+        ("l", "toggle_log", "Toggle Log"),
+        ("q", "quit", "Quit"),
+    ]
+
     def __init__(self, config_path: str = "config.toml", **kwargs):
         """Initialize standalone app."""
 
     async def on_mount(self) -> None:
-        """Compose controller + view, attach to event loop, bind keyboard shortcuts."""
+        """Compose controller + view, attach to event loop, bind keyboard shortcuts.
+
+        RECOMMENDATION #3: Get validation from controller, display only.
+        Should-fix #2: Only show validation summary if warnings/errors exist.
+        """
 
     def on_key(self, event: Key) -> None:
-        """Global keyboard handler routing to controller.keyboard_bindings."""
+        """Global keyboard handler routing to controller.keyboard_hints."""
 
     async def on_unmount(self) -> None:
         """Detach controller and cleanup."""
@@ -587,7 +728,10 @@ class CmdorcApp(App):
         """Show/hide log pane."""
 
     def action_show_help(self) -> None:
-        """Show help screen with keyboard shortcuts and conflicts."""
+        """Show help screen with keyboard shortcuts and conflicts.
+
+        FIX #6: Uses ModalScreen instead of log pane.
+        """
 ```
 
 ### `src/cmdorc_frontend/models.py` (NEW - Config Validation)
@@ -615,27 +759,33 @@ class ConfigValidationResult:
 | Rendering in host TUI | `CmdorcView` | Embedding |
 | Both controller + rendering | `CmdorcController` + `CmdorcView` | Embedding |
 
-### CmdorcController Embedding Contract
+### CmdorcController Embedding Contract (v0.1 Stable API)
 
 **Guarantees:**
 - Non-Textual (can be used without Textual)
 - Stateless except for internal orchestrator/watchers
 - All outbound events are callbacks (no polling)
 - `enable_watchers=False` prevents watcher auto-start (host decides lifecycle)
-- `keyboard_bindings` metadata is read-only (host decides binding strategy)
+- `keyboard_hints` metadata is read-only (host decides binding strategy) - POLISH #1
+- Sync-safe intent methods (`request_run`, `request_cancel`) for UI integration - FIX #1
+- Idempotent `attach()` with loop validation - RECOMMENDATION #1
+- Thread-safe file watcher callbacks via `call_soon_threadsafe()` - FIX #5
+- Stable public API documented in docstring - RECOMMENDATION #2
 
 **Responsibilities of Host App:**
 - Create and own the controller
-- Call `attach(loop)` when ready to start watchers
+- Call `attach(loop)` when ready to start watchers (loop must be running)
 - Call `detach()` when shutting down
-- Optionally wire outbound event callbacks
-- Optionally bind keyboard shortcuts from `keyboard_bindings` metadata
+- Optionally wire outbound event callbacks (on_command_started, on_command_finished, on_state_reconciled)
+- Optionally bind keyboard shortcuts from `keyboard_hints` metadata using sync-safe methods
+- Check `keyboard_conflicts` before binding to avoid collisions
 
 ### CmdorcView Embedding Contract
 
 **Guarantees:**
 - Passive Textual widget (no global key handling)
 - Receives controller instance at init
+- Tracks duplicate command occurrences - FIX #2
 - No state management (reads from controller)
 - No lifecycle management (host app owns)
 - Optional log pane rendering
@@ -643,20 +793,24 @@ class ConfigValidationResult:
 **Responsibilities of Host App:**
 - Provide controller instance
 - Integrate into host's layout/compose()
-- No additional wiring needed (view auto-subscribes to controller callbacks)
+- No additional wiring needed (view auto-subscribes to controller callbacks via integrator)
+- Can use `show_log_pane=False` in embedded mode
 
 ### Edge Cases & Solutions
 
 | Case | Solution |
 |------|----------|
 | Controller without view | Fully functional (programmatic command control) |
-| Multiple views, one controller | Supported (all views see same state) |
-| Host event loop not running | `controller.attach()` fails gracefully |
-| Watcher lifecycle mismatch | `controller.detach()` cancels running commands |
-| Keyboard binding conflicts | Host checks `keyboard_bindings` before binding |
+| Multiple views, one controller | Supported (all views see same state, each tracks duplicates independently) |
+| Host event loop not running | `controller.attach()` raises RuntimeError with clear message - RECOMMENDATION #1 |
+| Watcher lifecycle mismatch | `controller.detach()` cancels running commands safely |
+| Keyboard binding conflicts | Host checks `keyboard_conflicts` before binding - FIX #3 |
 | Outbound callback exceptions | Controller catches, logs, doesn't propagate |
-| View without log pane in embedded mode | Notifier still functions via logging |
-| enable_watchers=False then manual attach | Idempotent, no double-start |
+| View without log pane in embedded mode | Notifier defaults to NoOpNotifier (silent) - POLISH #3 |
+| enable_watchers=False then manual attach | Idempotent, no double-start - RECOMMENDATION #1 |
+| Sync-safe vs async methods | Use `request_run()`/`request_cancel()` from sync contexts - FIX #1 |
+| Trigger chain truncation edge case | Minimum width check (10 chars) prevents negative values - FIX #7 |
+| Invalid keyboard keys | Validated against VALID_KEYS set - FIX #8 |
 
 ---
 
