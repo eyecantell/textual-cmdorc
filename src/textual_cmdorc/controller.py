@@ -2,8 +2,8 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from cmdorc import CommandOrchestrator
 
@@ -40,7 +40,7 @@ class CmdorcController:
         self.config_path = Path(config_path)
         self.notifier = notifier or NoOpNotifier()  # POLISH #3: Silent by default
         self.enable_watchers = enable_watchers
-        self._loop: Optional[asyncio.AbstractEventLoop] = None  # FIX #1: Store loop reference
+        self._loop: asyncio.AbstractEventLoop | None = None  # FIX #1: Store loop reference
         self._file_watcher = None
 
         # Load configuration

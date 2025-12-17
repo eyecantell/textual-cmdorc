@@ -2,7 +2,6 @@
 
 import logging
 from pathlib import Path
-from typing import Tuple
 
 try:
     import tomllib
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def load_frontend_config(
     path: str | Path,
-) -> Tuple[RunnerConfig, KeyboardConfig, list[WatcherConfig], list[CommandNode]]:
+) -> tuple[RunnerConfig, KeyboardConfig, list[WatcherConfig], list[CommandNode]]:
     """Load configuration for any frontend.
 
     Args:
@@ -41,7 +40,7 @@ def load_frontend_config(
         with open(path) as f:
             raw = tomllib.loads(f.read())
     except Exception as e:
-        raise ValueError(f"Failed to parse config file {path}: {e}")
+        raise ValueError(f"Failed to parse config file {path}: {e}") from e
 
     # Parse keyboard config (FIX #8: validation happens in controller)
     keyboard_raw = raw.get("keyboard", {})
@@ -69,12 +68,11 @@ def load_frontend_config(
 
     # Build hierarchy from runner config
     import re
-    from typing import Dict, List
 
     from cmdorc import CommandConfig
 
-    commands: Dict[str, CommandConfig] = {c.name: c for c in runner_config.commands}
-    graph: Dict[str, List[str]] = {name: [] for name in commands}
+    commands: dict[str, CommandConfig] = {c.name: c for c in runner_config.commands}
+    graph: dict[str, list[str]] = {name: [] for name in commands}
 
     for name, config in commands.items():
         for trigger in config.triggers:
@@ -85,7 +83,7 @@ def load_frontend_config(
                     graph[parent].append(name)
 
     visited: set[str] = set()
-    roots: List[CommandNode] = []
+    roots: list[CommandNode] = []
 
     def build_node(name: str, visited_local: set[str]) -> CommandNode | None:
         if name in visited_local:

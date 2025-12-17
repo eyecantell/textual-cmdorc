@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from typing import List
 
 from cmdorc import CommandOrchestrator
 
@@ -24,7 +23,7 @@ class WatchdogWatcher(TriggerSourceWatcher):
         self.orchestrator = orchestrator
         self.loop = loop
         self.observer = None
-        self.handlers: List = []
+        self.handlers: list = []
 
     def add_watch(self, config: WatcherConfig) -> None:
         """Add a watch configuration."""

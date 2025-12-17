@@ -58,9 +58,11 @@ class TestCreateDefaultConfig:
             config_path = Path(tmpdir) / "config.toml"
 
             # Mock Path.write_text to raise PermissionError
-            with patch.object(Path, "write_text", side_effect=PermissionError("Access denied")):
-                with pytest.raises(PermissionError):
-                    create_default_config(config_path)
+            with (
+                patch.object(Path, "write_text", side_effect=PermissionError("Access denied")),
+                pytest.raises(PermissionError),
+            ):
+                create_default_config(config_path)
 
     def test_create_default_config_template_valid_toml(self):
         """Test that the default template is valid TOML."""
@@ -121,37 +123,41 @@ class TestMain:
             config_path = Path(tmpdir) / "config.toml"
             create_default_config(config_path)
 
-            with patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]):
-                with patch("textual_cmdorc.cli.CmdorcApp") as mock_app:
-                    mock_instance = MagicMock()
-                    mock_app.return_value = mock_instance
+            with (
+                patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+            ):
+                mock_instance = MagicMock()
+                mock_app.return_value = mock_instance
 
-                    main()
+                main()
 
-                    # Verify CmdorcApp was called with the config path
-                    mock_app.assert_called_once_with(config_path=str(config_path))
-                    mock_instance.run.assert_called_once()
+                # Verify CmdorcApp was called with the config path
+                mock_app.assert_called_once_with(config_path=str(config_path))
+                mock_instance.run.assert_called_once()
 
     def test_main_auto_creates_config(self):
         """Test that main auto-creates missing config."""
         with TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "config.toml"
 
-            with patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]):
-                with patch("textual_cmdorc.cli.CmdorcApp") as mock_app:
-                    mock_instance = MagicMock()
-                    mock_app.return_value = mock_instance
-                    with patch("builtins.print") as mock_print:
-                        main()
+            with (
+                patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+            ):
+                mock_instance = MagicMock()
+                mock_app.return_value = mock_instance
+                with patch("builtins.print") as mock_print:
+                    main()
 
-                    # Verify config was created
-                    assert config_path.exists()
+                # Verify config was created
+                assert config_path.exists()
 
-                    # Verify creation message was printed
-                    mock_print.assert_called_once()
-                    call_args = mock_print.call_args[0][0]
-                    assert "Created default config at:" in call_args
-                    assert str(config_path) in call_args
+                # Verify creation message was printed
+                mock_print.assert_called_once()
+                call_args = mock_print.call_args[0][0]
+                assert "Created default config at:" in call_args
+                assert str(config_path) in call_args
 
     def test_main_keyboard_interrupt(self):
         """Test handling of KeyboardInterrupt (Ctrl+C)."""
@@ -175,7 +181,7 @@ class TestMain:
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
                 patch("textual_cmdorc.cli.create_default_config", side_effect=PermissionError("Access denied")),
                 patch("sys.stderr", new_callable=StringIO),
-                pytest.raises(SystemExit) as exc_info
+                pytest.raises(SystemExit) as exc_info,
             ):
                 main()
 
@@ -187,15 +193,15 @@ class TestMain:
             config_path = Path(tmpdir) / "config.toml"
             create_default_config(config_path)
 
-            with (patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
-                   patch("textual_cmdorc.cli.CmdorcApp") as mock_app
+            with (
+                patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_instance.run.side_effect = RuntimeError("App error")
                 mock_app.return_value = mock_instance
 
-                with (patch("sys.stderr", new_callable=StringIO),
-                    pytest.raises(SystemExit) as exc_info):
+                with patch("sys.stderr", new_callable=StringIO), pytest.raises(SystemExit) as exc_info:
                     main()
 
                 assert exc_info.value.code == 1
@@ -207,8 +213,10 @@ class TestMain:
             create_default_config(config_path)
 
             # Use relative path
-            with (patch.object(sys, "argv", ["cmdorc-tui", "-c", "config.toml"]),
-                  patch("textual_cmdorc.cli.CmdorcApp") as mock_app):
+            with (
+                patch.object(sys, "argv", ["cmdorc-tui", "-c", "config.toml"]),
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+            ):
                 mock_instance = MagicMock()
                 mock_app.return_value = mock_instance
 

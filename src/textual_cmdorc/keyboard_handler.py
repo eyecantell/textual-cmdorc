@@ -6,7 +6,7 @@ Provides sync-safe keyboard binding that respects FIX #1 and FIX #3:
 """
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 

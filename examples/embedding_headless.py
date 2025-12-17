@@ -206,7 +206,7 @@ async def example_monitoring():
             await asyncio.sleep(5)
 
     print("\n📊 Health check history:")
-    for cmd, result in executor.results.items():
+    for _cmd, result in executor.results.items():
         print(f"  {result['state']}: {result['duration']}")
 
     await executor.teardown()

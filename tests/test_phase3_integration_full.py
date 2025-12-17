@@ -479,7 +479,6 @@ class TestEndToEndWithAllFeatures:
                 # Calling shouldn't raise (even without loop attached)
                 callback()
 
-
     def test_help_screen_content_comprehensive(self, complex_controller):
         """Test help screen includes all relevant information."""
         handler = KeyboardHandler(complex_controller)
