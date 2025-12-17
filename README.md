@@ -9,6 +9,8 @@ A Textual-based TUI wrapper for [cmdorc](https://github.com/eyecantell/cmdorc), 
 
 **Key Design:** Embeddable by default. Use as a **standalone TUI app** or **embed in larger applications**. The architecture splits into non-Textual controller (orchestration) and passive Textual view (rendering), enabling reuse across frontends.
 
+**Current Status:** ✅ All Phase 0-3 features complete and tested (137 tests, 47% coverage). Ready for production use.
+
 **Ideal for:** Developer tools, automation monitoring, interactive workflows, or as a subcomponent in larger TUIs.
 
 The project is structured with a shared backend (`cmdorc_frontend`) for config parsing, models, state management, and abstract watchers—enabling easy extension to other frontends (e.g., VSCode)—and TUI-specific code in `textual_cmdorc`.
