@@ -16,58 +16,96 @@ from textual.containers import Container, Vertical
 
 from textual_cmdorc.controller import CmdorcController
 from textual_cmdorc.view import CmdorcView
+from textual_cmdorc.keyboard_handler import KeyboardHandler, DuplicateIndicator
 from cmdorc_frontend.models import ConfigValidationResult, KeyboardConfig
 
 logger = logging.getLogger(__name__)
 
 
 class HelpScreen(ModalScreen):
-    """Modal help screen showing keyboard shortcuts and conflicts.
+    """Modal help screen showing keyboard shortcuts, conflicts, and tips.
 
     FIX #6: Use ModalScreen instead of log pane for help.
+    Includes keyboard conflict detection (FIX #3) and helpful tips.
     """
 
     BINDINGS = [("escape", "dismiss", "Close")]
 
-    def __init__(self, keyboard_config: KeyboardConfig, keyboard_conflicts: dict):
+    def __init__(
+        self,
+        keyboard_config: KeyboardConfig,
+        keyboard_conflicts: dict,
+        keyboard_handler: "KeyboardHandler | None" = None,
+    ):
         """Initialize help screen.
 
         Args:
             keyboard_config: KeyboardConfig with shortcuts
-            keyboard_conflicts: Dict of conflicting keys
+            keyboard_conflicts: Dict of conflicting keys (FIX #3)
+            keyboard_handler: Optional KeyboardHandler for detailed info
         """
         super().__init__()
         self.keyboard_config = keyboard_config
         self.keyboard_conflicts = keyboard_conflicts
+        self.keyboard_handler = keyboard_handler
 
     def compose(self) -> ComposeResult:
-        """Compose help content."""
-        yield Static("Keyboard Shortcuts", classes="help-header")
+        """Compose help content with sections."""
+        # Header
+        yield Static("Command Line TUI - Keyboard Help", classes="help-header")
 
-        # Shortcuts
+        # App shortcuts
+        app_shortcuts = (
+            "Application Shortcuts:\n"
+            "  [h] — Show this help screen\n"
+            "  [r] — Reload configuration\n"
+            "  [l] — Toggle log pane\n"
+            "  [q] — Quit application"
+        )
+        yield Static(app_shortcuts)
+
+        # Command shortcuts
         if self.keyboard_config.shortcuts:
-            content = "App Shortcuts:\n"
-            content += "  [h] — Show help\n"
-            content += "  [r] — Reload config\n"
-            content += "  [l] — Toggle log pane\n"
-            content += "  [q] — Quit\n\n"
+            yield Static("Command Shortcuts:", classes="help-header")
 
-            content += "Command Shortcuts:\n"
-            for cmd_name, key in self.keyboard_config.shortcuts.items():
-                marker = " ⚠ (conflict)" if key in self.keyboard_conflicts else ""
-                content += f"  [{key}] — {cmd_name}{marker}\n"
+            content = ""
+            for cmd_name, key in sorted(self.keyboard_config.shortcuts.items()):
+                if key in self.keyboard_conflicts:
+                    # Mark conflicting commands
+                    conflicting = [c for c in self.keyboard_conflicts[key] if c != cmd_name]
+                    if conflicting:
+                        content += f"  [{key}] → {cmd_name} ⚠ (also: {', '.join(conflicting)})\n"
+                    else:
+                        content += f"  [{key}] → {cmd_name}\n"
+                else:
+                    content += f"  [{key}] → {cmd_name}\n"
 
             yield Static(content)
         else:
-            yield Static("No keyboard shortcuts configured.")
+            yield Static("No command shortcuts configured.", classes="help-header")
 
-        # Conflicts
+        # Keyboard conflicts (FIX #3)
         if self.keyboard_conflicts:
-            conflict_info = "\nConflicting Keys:\n"
-            for key, commands in self.keyboard_conflicts.items():
+            yield Static("Keyboard Conflicts (FIX #3):", classes="help-header")
+
+            conflict_info = ""
+            for key, commands in sorted(self.keyboard_conflicts.items()):
                 conflict_info += f"  [{key}] assigned to: {', '.join(commands)}\n"
-                conflict_info += f"       → First one wins\n"
+                conflict_info += f"       → First command wins, others are shadowed\n"
+
             yield Static(conflict_info)
+
+        # Tips
+        yield Static("Tips:", classes="help-header")
+
+        tips = (
+            "• Duplicate commands appear in multiple places (marked with ↳)\n"
+            "• Keyboard shortcuts affect all instances of a command\n"
+            "• Add shortcuts in config: [keyboard] section\n"
+            "• Valid keys: 1-9, a-z, f1-f12\n"
+            "• Conflicts resolved alphabetically (first one wins)"
+        )
+        yield Static(tips)
 
 
 class CmdorcApp(App):
@@ -121,6 +159,7 @@ class CmdorcApp(App):
         self.config_path = Path(config_path)
         self.controller: CmdorcController | None = None
         self.view: CmdorcView | None = None
+        self.keyboard_handler: KeyboardHandler | None = None
         self._show_log = True
 
     def compose(self) -> ComposeResult:
@@ -131,7 +170,7 @@ class CmdorcApp(App):
         yield Footer()
 
     async def on_mount(self) -> None:
-        """Initialize controller and attach to event loop.
+        """Initialize controller, keyboard handler, and attach to event loop.
 
         RECOMMENDATION #3: Get validation from controller, display only.
         Should-fix #2: Only show validation summary if warnings/errors exist.
@@ -150,6 +189,13 @@ class CmdorcApp(App):
             # Attach to event loop
             loop = asyncio.get_running_loop()
             self.controller.attach(loop)
+
+            # Initialize keyboard handler (FIX #1: sync-safe binding)
+            self.keyboard_handler = KeyboardHandler(self.controller, app=self)
+            callbacks = self.keyboard_handler.bind_all()
+
+            if callbacks:
+                logger.info(f"Bound {len(callbacks)} keyboard shortcuts")
 
             # Update view with controller
             if self.view:
@@ -240,6 +286,7 @@ class CmdorcApp(App):
         """Show help screen with keyboard shortcuts and conflicts.
 
         FIX #6: Uses ModalScreen instead of log pane.
+        FIX #3: Shows keyboard conflicts and how to resolve them.
         """
         if not self.controller:
             return
@@ -247,6 +294,7 @@ class CmdorcApp(App):
         help_screen = HelpScreen(
             self.controller.keyboard_config,
             self.controller.keyboard_conflicts,
+            keyboard_handler=self.keyboard_handler,
         )
         self.push_screen(help_screen)
 
