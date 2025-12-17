@@ -50,13 +50,14 @@ class TriggerSource:
 
         return cls(name=last_trigger, kind=kind, chain=trigger_chain)
 
-    def format_chain(self, separator: str = " → ", max_width: int | None = None) -> str:
+    def format_chain(self, separator: str = " → ", max_width: int = 80) -> str:
         """Format trigger chain for display, with optional left truncation.
 
         Args:
             separator: String to join trigger events with.
-            max_width: Maximum width before truncation (default None = no limit).
+            max_width: Maximum width before truncation (default 80).
                       If exceeded, truncates from left with "..." prefix.
+                      FIX #7: Minimum width check (10 chars) prevents negative keep_chars.
 
         Returns:
             Formatted string representation of the chain, possibly truncated.
@@ -66,13 +67,37 @@ class TriggerSource:
 
         full_chain = separator.join(self.chain)
 
+        # FIX #7: Minimum width check before truncation
+        if max_width < 10:
+            # Too narrow to truncate meaningfully, return as-is
+            return full_chain
+
         # Truncate from left if needed
-        if max_width is not None and len(full_chain) > max_width:
+        if len(full_chain) > max_width:
             keep_chars = max_width - 4  # Reserve 4 for "... "
             if keep_chars > 0:
                 return f"...{separator}{full_chain[-keep_chars:]}"
 
         return full_chain
+
+    def get_semantic_summary(self) -> str:
+        """Get human-readable summary of trigger source.
+
+        Returns:
+            Short semantic description:
+            - "Ran manually" (no chain)
+            - "Ran automatically (file change)" (file watcher)
+            - "Ran automatically (triggered by another command)" (lifecycle)
+        """
+        if not self.chain:
+            return "Ran manually"
+
+        if self.kind == "file":
+            return "Ran automatically (file change)"
+        elif self.kind == "lifecycle":
+            return "Ran automatically (triggered by another command)"
+        else:
+            return "Ran automatically"
 
 
 @dataclass
@@ -111,6 +136,51 @@ class CommandNode:
     def triggers(self) -> list[str]:
         """Get triggers from config."""
         return self.config.triggers
+
+
+@dataclass
+class ConfigValidationResult:
+    """Results from startup configuration validation.
+
+    RECOMMENDATION #3: Built by controller, consumed by app for display only.
+    """
+
+    commands_loaded: int = 0
+    """Number of commands successfully loaded."""
+
+    watchers_active: int = 0
+    """Number of file watchers started."""
+
+    warnings: list[str] = field(default_factory=list)
+    """Config issues found (non-fatal)."""
+
+    errors: list[str] = field(default_factory=list)
+    """Config errors (should be fatal)."""
+
+
+@dataclass
+class KeyboardConfig:
+    """Keyboard shortcut configuration.
+
+    FIX #8: Shortcuts validated against VALID_KEYS set (1-9, a-z, f1-f12).
+    """
+
+    shortcuts: dict[str, str]
+    """Mapping of command_name -> key."""
+
+    enabled: bool = True
+    """Whether keyboard shortcuts are enabled."""
+
+    show_in_tooltips: bool = True
+    """Whether to show keyboard hints in tooltips."""
+
+
+# FIX #8: Valid keyboard keys
+VALID_KEYS = set(
+    [str(i) for i in range(1, 10)]  # 1-9
+    + [chr(i) for i in range(ord("a"), ord("z") + 1)]  # a-z
+    + [f"f{i}" for i in range(1, 13)]  # f1-f12
+)
 
 
 def map_run_state_to_icon(state: "RunState") -> str:
