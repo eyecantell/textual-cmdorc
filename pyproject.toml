@@ -1,7 +1,7 @@
 [project]
 name = "textual-cmdorc"
 version = "0.1.0"
-description = "Clickable file links for Textual applications."
+description = "Embeddable TUI frontend for cmdorc command orchestration with real-time status, keyboard shortcuts, and trigger chains."
 readme = "README.md"
 authors = [
     {name = "eyecantell", email = "paul@pneuma.solutions"},
@@ -26,15 +26,19 @@ keywords = [
     "textual",
     "tui",
     "terminal",
-    "file",
-    "link",
-    "widget",
-    "clickable",
+    "cmdorc",
+    "orchestration",
+    "command-execution",
+    "automation",
     "developer-tools",
+    "monitoring",
+    "embeddable",
 ]
 requires-python = ">=3.10"
 dependencies = [
     "textual>=6.6.0",
+    "cmdorc>=0.1.0",
+    "watchdog>=4.0.0",
 ]
 
 [project.urls]
