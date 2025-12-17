@@ -162,3 +162,15 @@ class CmdorcCommandLink:
     def command_name(self) -> str:
         """Get command name (for StateReconciler protocol)."""
         return self.config.name
+
+    def get_label(self) -> str:
+        """Generate tree node label with status icon and name.
+
+        Returns:
+            Formatted label string for tree display
+        """
+        # Format: icon + name (+ shortcut if available)
+        label = f"{self._status_icon} {self.config.name}"
+        if self.keyboard_shortcut:
+            label = f"{label} [{self.keyboard_shortcut}]"
+        return label

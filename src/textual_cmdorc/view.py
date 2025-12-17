@@ -43,6 +43,7 @@ class CmdorcView(Widget):
         self.enable_local_bindings = enable_local_bindings
         # FIX #2: Track all instances of each command to detect duplicates
         self._command_links: dict[str, list] = {}
+        self._command_nodes: dict[str, list] = {}  # Store tree node references
         self.log_pane: Log | None = None
 
     def compose(self):
@@ -97,9 +98,14 @@ class CmdorcView(Widget):
             # Add to tree
             if parent is None:
                 tree.root.label = "Commands"
-                tree_node = tree.root.add_child(link)
+                tree_node = tree.root.add(link.get_label(), data=link)
             else:
-                tree_node = parent.add_child(link)
+                tree_node = parent.add(link.get_label(), data=link)
+
+            # Store tree node reference for updates
+            if node.name not in self._command_nodes:
+                self._command_nodes[node.name] = []
+            self._command_nodes[node.name].append(tree_node)
 
             # Recursively add children
             if node.children:
@@ -110,6 +116,7 @@ class CmdorcView(Widget):
         tree = self.query_one("#command-tree", Tree)
         tree.clear()
         self._command_links.clear()
+        self._command_nodes.clear()
         self._build_tree(tree, self.controller.hierarchy)
 
     def update_command(self, name: str, update) -> None:
@@ -120,6 +127,9 @@ class CmdorcView(Widget):
             update: PresentationUpdate with new display state
         """
         if name in self._command_links:
-            for link in self._command_links[name]:
+            for i, link in enumerate(self._command_links[name]):
                 if hasattr(link, "apply_update"):
                     link.apply_update(update)
+                # Update tree node label to reflect new status
+                if name in self._command_nodes and i < len(self._command_nodes[name]):
+                    self._command_nodes[name][i].label = link.get_label()

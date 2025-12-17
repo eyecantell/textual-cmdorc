@@ -128,7 +128,7 @@ class CmdorcController:
 
     async def run_command(self, name: str) -> None:
         """Run a command by name (async)."""
-        if not self.orchestrator.has_command(name):
+        if name not in self.orchestrator.list_commands():
             self.notifier.warning(f"Command not found: {name}")
             return
         try:
@@ -140,7 +140,7 @@ class CmdorcController:
 
     async def cancel_command(self, name: str) -> None:
         """Cancel a running command (async)."""
-        if not self.orchestrator.has_command(name):
+        if name not in self.orchestrator.list_commands():
             self.notifier.warning(f"Command not found: {name}")
             return
         try:
@@ -228,12 +228,12 @@ class CmdorcController:
         App displays results, does not re-derive them.
         """
         result = ConfigValidationResult(
-            commands_loaded=len(self.orchestrator.runner_config.commands),
+            commands_loaded=len(self.runner_config.commands),
             watchers_active=len(self.watcher_configs) if self.watcher_configs else 0,
         )
 
         # Keyboard validation
-        command_names = {c.name for c in self.orchestrator.runner_config.commands}
+        command_names = {c.name for c in self.runner_config.commands}
         from cmdorc_frontend.models import VALID_KEYS
 
         for cmd_name, key in self.keyboard_config.shortcuts.items():
