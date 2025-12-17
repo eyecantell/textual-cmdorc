@@ -14,17 +14,18 @@ import sys
 from pathlib import Path
 
 # Clean up any test mocks from sys.modules to ensure we use real cmdorc
-if 'cmdorc' in sys.modules:
-    del sys.modules['cmdorc']
+if "cmdorc" in sys.modules:
+    del sys.modules["cmdorc"]
 
 # Add src to path for local development
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import asyncio
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Header, Footer, Static
 from textual.reactive import reactive
+from textual.widgets import Footer, Header, Static
 
 from textual_cmdorc import CmdorcController, CmdorcView, HelpScreen, KeyboardHandler
 
@@ -153,6 +154,7 @@ triggers = []
         """Expand all top-level tree nodes."""
         try:
             from textual.widgets import Tree
+
             tree = self.view.query_one(Tree)
             # Expand root and all first-level children
             tree.root.expand()

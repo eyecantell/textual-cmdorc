@@ -1,17 +1,19 @@
 """Pytest configuration and fixtures."""
 
 import sys
+from enum import Enum
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
-from enum import Enum
 
 # Add src directory to Python path for imports
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
+
 # Mock cmdorc module before importing our code
 class RunState(Enum):
     """Mock RunState enum."""
+
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
@@ -21,6 +23,7 @@ class RunState(Enum):
 
 class CommandConfig:
     """Mock CommandConfig."""
+
     def __init__(self, name="test", command="echo test", triggers=None):
         self.name = name
         self.command = command
@@ -29,6 +32,7 @@ class CommandConfig:
 
 class RunResult:
     """Mock RunResult."""
+
     def __init__(self, state=RunState.SUCCESS, duration_str="0.1s", output=None):
         self.state = state
         self.duration_str = duration_str
@@ -37,6 +41,7 @@ class RunResult:
 
 class RunHandle:
     """Mock RunHandle."""
+
     def __init__(self, name="test", trigger_chain=None):
         self.name = name
         self.trigger_chain = trigger_chain or []
@@ -46,6 +51,7 @@ class RunHandle:
 
 class CommandOrchestrator:
     """Mock CommandOrchestrator."""
+
     def __init__(self, config=None):
         self.runner_config = config or self._default_config()
 
@@ -81,6 +87,7 @@ class CommandOrchestrator:
 
 class RunnerConfig:
     """Mock RunnerConfig."""
+
     def __init__(self, commands=None):
         self.commands = commands or [CommandConfig()]
 
@@ -99,11 +106,13 @@ def load_config(path):
 
         commands = []
         for cmd_data in raw.get("command", []):
-            commands.append(CommandConfig(
-                name=cmd_data.get("name", "test"),
-                command=cmd_data.get("command", "echo test"),
-                triggers=cmd_data.get("triggers", [])
-            ))
+            commands.append(
+                CommandConfig(
+                    name=cmd_data.get("name", "test"),
+                    command=cmd_data.get("command", "echo test"),
+                    triggers=cmd_data.get("triggers", []),
+                )
+            )
 
         if not commands:
             commands = [CommandConfig()]
@@ -124,4 +133,4 @@ cmdorc_module.CommandOrchestrator = CommandOrchestrator
 cmdorc_module.RunnerConfig = RunnerConfig
 cmdorc_module.load_config = load_config
 
-sys.modules['cmdorc'] = cmdorc_module
+sys.modules["cmdorc"] = cmdorc_module

@@ -1,10 +1,11 @@
 """Phase 2 tests for keyboard handling and duplicate indicators."""
 
-import pytest
-from pathlib import Path
+import contextlib
 
-from textual_cmdorc.keyboard_handler import KeyboardHandler, DuplicateIndicator
+import pytest
+
 from textual_cmdorc.controller import CmdorcController
+from textual_cmdorc.keyboard_handler import DuplicateIndicator, KeyboardHandler
 
 
 @pytest.fixture
@@ -87,7 +88,7 @@ class TestKeyboardHandler:
         assert isinstance(callbacks, dict)
         assert len(callbacks) > 0
         # Each callback should be callable
-        for key, callback in callbacks.items():
+        for _key, callback in callbacks.items():
             assert callable(callback)
 
     def test_bindings_tracked(self, controller):
@@ -107,15 +108,13 @@ class TestKeyboardHandler:
 
         assert callable(callback)
         # Callback should not raise when called
-        try:
+        with contextlib.suppress(RuntimeError):
             callback()
-        except RuntimeError:
-            # Expected if loop not running, but callback itself is valid
-            pass
 
     def test_conflict_detection(self, conflict_controller):
         """Test FIX #3: Keyboard conflicts are detected."""
         handler = KeyboardHandler(conflict_controller)
+        assert handler is not None
         conflicts = conflict_controller.keyboard_conflicts
 
         # Should have conflict on key "1"
@@ -173,6 +172,7 @@ class TestKeyboardHandler:
 
     def test_handler_with_app_parameter(self, controller):
         """Test handler with app parameter."""
+
         # Mock app object
         class MockApp:
             def bind(self, key, action, show=True):

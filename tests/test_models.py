@@ -1,15 +1,15 @@
 """Tests for cmdorc_frontend models - Phase 0 architecture."""
 
-import pytest
+from pathlib import Path
+
 from cmdorc_frontend.models import (
-    TriggerSource,
+    VALID_KEYS,
+    CommandNode,
     ConfigValidationResult,
     KeyboardConfig,
-    VALID_KEYS,
     PresentationUpdate,
-    CommandNode,
+    TriggerSource,
 )
-from pathlib import Path
 
 
 class TestTriggerSource:
@@ -272,6 +272,7 @@ class TestCommandNode:
 
     def test_command_node_name_property(self):
         """Test CommandNode.name property."""
+
         # Mock config with name attribute
         class MockConfig:
             name = "TestCommand"
@@ -281,6 +282,7 @@ class TestCommandNode:
 
     def test_command_node_triggers_property(self):
         """Test CommandNode.triggers property."""
+
         class MockConfig:
             name = "TestCmd"
             triggers = ["py_file_changed"]
@@ -290,6 +292,7 @@ class TestCommandNode:
 
     def test_command_node_default_children(self):
         """Test CommandNode has empty children by default."""
+
         class MockConfig:
             name = "TestCmd"
 
@@ -298,6 +301,7 @@ class TestCommandNode:
 
     def test_command_node_with_children(self):
         """Test CommandNode with children."""
+
         class MockConfig:
             name = "Parent"
 

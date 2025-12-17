@@ -1,15 +1,16 @@
 """Configuration parsing for cmdorc frontend."""
 
+import logging
 from pathlib import Path
 from typing import Tuple
-import logging
 
 try:
     import tomllib
 except ImportError:
     import tomli as tomllib  # type: ignore
 
-from cmdorc import load_config, RunnerConfig
+from cmdorc import RunnerConfig, load_config
+
 from cmdorc_frontend.models import CommandNode, KeyboardConfig
 from cmdorc_frontend.watchers import WatcherConfig
 
@@ -29,9 +30,18 @@ def load_frontend_config(
     """
     path = Path(path)
 
+    # Check file exists with helpful error
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Config file not found: {path}\nRun 'cmdorc-tui' without arguments to auto-create a default config."
+        )
+
     # Load TOML content
-    with open(path) as f:
-        raw = tomllib.loads(f.read())
+    try:
+        with open(path) as f:
+            raw = tomllib.loads(f.read())
+    except Exception as e:
+        raise ValueError(f"Failed to parse config file {path}: {e}")
 
     # Parse keyboard config (FIX #8: validation happens in controller)
     keyboard_raw = raw.get("keyboard", {})
@@ -58,9 +68,10 @@ def load_frontend_config(
     runner_config = load_config(path)
 
     # Build hierarchy from runner config
-    from cmdorc import CommandConfig
-    from typing import Dict, List
     import re
+    from typing import Dict, List
+
+    from cmdorc import CommandConfig
 
     commands: Dict[str, CommandConfig] = {c.name: c for c in runner_config.commands}
     graph: Dict[str, List[str]] = {name: [] for name in commands}

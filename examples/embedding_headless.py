@@ -11,8 +11,6 @@ This example demonstrates:
 """
 
 import asyncio
-import json
-from pathlib import Path
 
 try:
     from textual_cmdorc import CmdorcController
@@ -104,10 +102,7 @@ class PipelineExecutor:
         if parallel:
             # Execute all commands concurrently
             print(f"\n▶ Executing {len(command_names)} commands in parallel...")
-            tasks = [
-                self.execute_command(name)
-                for name in command_names
-            ]
+            tasks = [self.execute_command(name) for name in command_names]
             await asyncio.gather(*tasks)
         else:
             # Execute sequentially
@@ -185,7 +180,7 @@ async def example_deployment():
             print(f"\n❌ {cmd} failed! Aborting deployment.")
             break
     else:
-        print(f"\n✓ Deployment completed successfully!")
+        print("\n✓ Deployment completed successfully!")
 
     await executor.teardown()
 
@@ -210,7 +205,7 @@ async def example_monitoring():
             print("⏳ Waiting 5 seconds...")
             await asyncio.sleep(5)
 
-    print(f"\n📊 Health check history:")
+    print("\n📊 Health check history:")
     for cmd, result in executor.results.items():
         print(f"  {result['state']}: {result['duration']}")
 
@@ -239,6 +234,7 @@ async def main():
     except Exception as e:
         print(f"\n\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
 

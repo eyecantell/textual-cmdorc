@@ -5,6 +5,7 @@ import logging
 from typing import List
 
 from cmdorc import CommandOrchestrator
+
 from cmdorc_frontend.watchers import TriggerSourceWatcher, WatcherConfig
 
 logger = logging.getLogger(__name__)

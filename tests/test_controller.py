@@ -1,11 +1,12 @@
 """Tests for CmdorcController - Phase 0 architecture."""
 
-import pytest
 import asyncio
-from pathlib import Path
-from textual_cmdorc.controller import CmdorcController
-from cmdorc_frontend.notifier import NoOpNotifier
+
+import pytest
+
 from cmdorc_frontend.models import ConfigValidationResult
+from cmdorc_frontend.notifier import NoOpNotifier
+from textual_cmdorc.controller import CmdorcController
 
 
 @pytest.fixture

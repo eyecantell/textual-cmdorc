@@ -1,8 +1,8 @@
 """Phase 5 embedding tests - Validate embedding patterns work correctly."""
 
 import asyncio
+
 import pytest
-from pathlib import Path
 
 from textual_cmdorc.controller import CmdorcController
 from textual_cmdorc.integrator import wire_all_callbacks
@@ -325,12 +325,8 @@ triggers = []
         result = controller.validate_config()
 
         # Host app pattern: check for errors
-        if result.errors:
-            # Abort initialization
-            abort = True
-        else:
-            abort = False
-
+        abort = bool(result.errors)
+        assert abort is False
         # Should have warnings about invalid key
         assert isinstance(result.warnings, list)
 

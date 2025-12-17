@@ -1,12 +1,13 @@
 """Phase 3 integration tests - Full workflow testing across all components."""
 
-import pytest
-from pathlib import Path
+import contextlib
 
-from textual_cmdorc.keyboard_handler import KeyboardHandler, DuplicateIndicator
-from textual_cmdorc.controller import CmdorcController
-from textual_cmdorc.integrator import create_command_link, wire_all_callbacks
+import pytest
+
 from cmdorc_frontend.models import TriggerSource
+from textual_cmdorc.controller import CmdorcController
+from textual_cmdorc.integrator import wire_all_callbacks
+from textual_cmdorc.keyboard_handler import DuplicateIndicator, KeyboardHandler
 
 
 @pytest.fixture
@@ -357,10 +358,8 @@ triggers = []
         result = controller.validate_config()
 
         # Should have warning about invalid key
-        has_warning = any(
-            "invalid" in str(w).lower() or "key" in str(w).lower()
-            for w in result.warnings
-        )
+        has_warning = any("invalid" in str(w).lower() or "key" in str(w).lower() for w in result.warnings)
+        assert has_warning is True
         assert isinstance(result.warnings, list)
 
 
@@ -406,8 +405,8 @@ class TestWireAllCallbacks:
         for link in links.values():
             assert link is not None
             # Links should have the necessary attributes set up
-            assert hasattr(link, 'keyboard_shortcut')
-            assert hasattr(link, 'current_trigger')
+            assert hasattr(link, "keyboard_shortcut")
+            assert hasattr(link, "current_trigger")
 
 
 class TestDuplicateCommandTracking:
@@ -461,7 +460,7 @@ class TestEndToEndWithAllFeatures:
         # 4. Help text is comprehensive
         help_text = handler.get_binding_help()
         assert "Keyboard Shortcuts:" in help_text
-        for key in hints.keys():
+        for key in hints:
             assert f"[{key}]" in help_text
 
     def test_multiple_callbacks_and_shortcuts_coexist(self, complex_controller):
@@ -474,14 +473,12 @@ class TestEndToEndWithAllFeatures:
         assert len(handler.bindings) == len(callbacks)
 
         # Each callback should be callable
-        for key, callback in callbacks.items():
-            assert callable(callback)
-            # Calling shouldn't raise (even without loop attached)
-            try:
+        with contextlib.suppress(RuntimeError):
+            for _, callback in callbacks.items():
+                assert callable(callback)
+                # Calling shouldn't raise (even without loop attached)
                 callback()
-            except RuntimeError:
-                # Expected if loop not running, but callback is valid
-                pass
+
 
     def test_help_screen_content_comprehensive(self, complex_controller):
         """Test help screen includes all relevant information."""

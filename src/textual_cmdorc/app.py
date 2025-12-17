@@ -11,13 +11,12 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.screen import ModalScreen
-from textual.widgets import Header, Footer, Static
-from textual.containers import Container, Vertical
+from textual.widgets import Footer, Header, Static
 
-from textual_cmdorc.controller import CmdorcController
-from textual_cmdorc.view import CmdorcView
-from textual_cmdorc.keyboard_handler import KeyboardHandler, DuplicateIndicator
 from cmdorc_frontend.models import ConfigValidationResult, KeyboardConfig
+from textual_cmdorc.controller import CmdorcController
+from textual_cmdorc.keyboard_handler import KeyboardHandler
+from textual_cmdorc.view import CmdorcView
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +90,7 @@ class HelpScreen(ModalScreen):
             conflict_info = ""
             for key, commands in sorted(self.keyboard_conflicts.items()):
                 conflict_info += f"  [{key}] assigned to: {', '.join(commands)}\n"
-                conflict_info += f"       → First command wins, others are shadowed\n"
+                conflict_info += "       → First command wins, others are shadowed\n"
 
             yield Static(conflict_info)
 
@@ -226,10 +225,7 @@ class CmdorcApp(App):
         Args:
             result: ConfigValidationResult
         """
-        logger.info(
-            f"Config loaded: {result.commands_loaded} commands, "
-            f"{result.watchers_active} watchers"
-        )
+        logger.info(f"Config loaded: {result.commands_loaded} commands, {result.watchers_active} watchers")
         for warning in result.warnings:
             logger.warning(f"⚠ {warning}")
         for error in result.errors:
@@ -297,6 +293,21 @@ class CmdorcApp(App):
             keyboard_handler=self.keyboard_handler,
         )
         self.push_screen(help_screen)
+
+    def action_command(self, command_name: str) -> None:
+        """Execute a command by name via keyboard shortcut.
+
+        This action is called when keyboard shortcuts are triggered via
+        KeyboardHandler bindings like "command(Lint)".
+
+        Args:
+            command_name: Name of command to execute (e.g., "Lint", "Format")
+        """
+        if self.controller:
+            # Use request_run (sync-safe) since this is called from UI context
+            self.controller.request_run(command_name)
+        else:
+            logger.warning(f"Cannot run command '{command_name}': controller not initialized")
 
 
 def main(config_path: str = "config.toml") -> None:

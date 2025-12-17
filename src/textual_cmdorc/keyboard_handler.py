@@ -6,7 +6,7 @@ Provides sync-safe keyboard binding that respects FIX #1 and FIX #3:
 """
 
 import logging
-from typing import Callable, Optional
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,8 @@ class KeyboardHandler:
             # Try to bind in app if available
             if self.app:
                 try:
-                    self.app.bind(key, f"command({command_name})", show=True)
+                    # Note: action parameters must be quoted strings for Textual to parse correctly
+                    self.app.bind(key, f'command("{command_name}")', show=True)
                 except Exception as e:
                     logger.error(f"Failed to bind key [{key}]: {e}")
 

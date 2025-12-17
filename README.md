@@ -135,31 +135,43 @@ class MyLargerApp(App):
 See [architecture.md](architecture.md#65-embedding-architecture--contracts) for detailed embedding contracts.
 
 ## Quick Start
-1. Initialize a config (optional):
+
+1. Run the TUI (auto-creates config.toml on first run):
    ```bash
-   cmdorc init config.toml  # Generates config with keyboard shortcut placeholders
-   ```
-   Or prepare a cmdorc config manually (e.g., examples/config.toml) with optional `[keyboard]` section:
-   ```toml
-   [keyboard]
-   shortcuts = { Lint = "1", Format = "2", Tests = "3" }
-   enabled = true
+   cmdorc-tui
    ```
 
-2. Run the TUI:
+   Or with a custom config:
    ```bash
-   textual run textual_cmdorc.app --config=config.toml
+   cmdorc-tui --config my-workflow.toml
    ```
-   - Or programmatically:
-     ```python
-     from textual_cmdorc import CmdorcApp
-     app = CmdorcApp(config_path="config.toml")
-     app.run()
-     ```
 
-3. Use keyboard shortcuts (e.g., press `1` to run/stop Lint, `2` for Format) or click play/stop buttons.
+   **Note:** The default config assumes `ruff` and `pytest` are available on PATH. Install them with:
+   ```bash
+   pip install ruff pytest
+   ```
 
-Example: Save a .py file → Watch "py_file_changed" → Lint → Format → Tests chain. Tooltips show full trigger breadcrumbs. Press `3` anywhere to stop Tests.
+2. On first run, a default config.toml will be created with:
+   - File watcher for `**/*.py` files
+   - Lint → Format → Tests command chain
+   - Keyboard shortcuts: 1=Lint, 2=Format, 3=Tests
+
+3. Edit config.toml to customize commands, triggers, and shortcuts.
+
+4. Use keyboard shortcuts (press `1` to run/stop Lint) or click play/stop buttons.
+
+Example workflow: Save a .py file → triggers "py_file_changed" → Lint → Format → Tests chain.
+
+### Programmatic Usage
+
+You can also use textual-cmdorc as a library:
+```python
+from textual_cmdorc import CmdorcApp
+app = CmdorcApp(config_path="config.toml")
+app.run()
+```
+
+Or embed in a larger application (see [Embedding textual-cmdorc in Larger Applications](#embedding-textual-cmdorc-in-larger-applications)).
 
 ## Development
 - Setup: `pdm install -G test`

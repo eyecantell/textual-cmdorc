@@ -41,6 +41,9 @@ dependencies = [
     "watchdog>=4.0.0",
 ]
 
+[project.scripts]
+cmdorc-tui = "textual_cmdorc.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/eyecantell/textual-cmdorc"
 Repository = "https://github.com/eyecantell/textual-cmdorc"

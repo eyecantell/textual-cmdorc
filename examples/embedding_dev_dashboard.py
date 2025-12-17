@@ -11,10 +11,10 @@ This example demonstrates:
 """
 
 import asyncio
+
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Static, TabbedContent, TabPane, Button
 from textual.reactive import reactive
+from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 
 # Import from textual-cmdorc
 try:

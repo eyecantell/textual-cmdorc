@@ -2,7 +2,8 @@
 
 import logging
 from pathlib import Path
-from cmdorc_frontend.models import TriggerSource, PresentationUpdate
+
+from cmdorc_frontend.models import PresentationUpdate, TriggerSource
 
 logger = logging.getLogger(__name__)
 
@@ -96,10 +97,7 @@ class CmdorcCommandLink:
             tooltip = f"{tooltip}\n[{self.keyboard_shortcut}] to run"
         else:
             # User-friendly hint for configuring shortcut
-            tooltip = (
-                f"{tooltip}\n"
-                f"Add shortcut: {self.config.name} = '<key>' in [keyboard] section"
-            )
+            tooltip = f"{tooltip}\nAdd shortcut: {self.config.name} = '<key>' in [keyboard] section"
 
         # Line 3: Duplicate indicator (if applicable)
         if self.is_duplicate:

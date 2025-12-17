@@ -11,7 +11,8 @@ import logging
 from typing import Callable
 
 from cmdorc import CommandOrchestrator, RunHandle
-from cmdorc_frontend.models import TriggerSource, CommandNode, PresentationUpdate, map_run_state_to_icon
+
+from cmdorc_frontend.models import CommandNode, PresentationUpdate, TriggerSource, map_run_state_to_icon
 from cmdorc_frontend.state_manager import StateReconciler
 from textual_cmdorc.widgets import CmdorcCommandLink
 
@@ -129,11 +130,7 @@ def wire_all_callbacks(
 
     def walk_tree(nodes):
         for node in nodes:
-            shortcut = (
-                keyboard_config.shortcuts.get(node.name)
-                if keyboard_config.enabled
-                else None
-            )
+            shortcut = keyboard_config.shortcuts.get(node.name) if keyboard_config.enabled else None
             link = create_command_link(
                 node,
                 orchestrator,

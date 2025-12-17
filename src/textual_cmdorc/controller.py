@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from cmdorc import CommandOrchestrator
+
 from cmdorc_frontend.config import load_frontend_config
-from cmdorc_frontend.models import TriggerSource, CommandNode, ConfigValidationResult
+from cmdorc_frontend.models import ConfigValidationResult, TriggerSource
 from cmdorc_frontend.notifier import CmdorcNotifier, NoOpNotifier
-from cmdorc_frontend.watchers import WatcherConfig
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +108,7 @@ class CmdorcController:
                 for cfg in self.watcher_configs:
                     self._file_watcher.add_watch(cfg)
                 self._file_watcher.start()
-                self.notifier.info(
-                    f"File watchers started ({len(self.watcher_configs)} configured)"
-                )
+                self.notifier.info(f"File watchers started ({len(self.watcher_configs)} configured)")
             except Exception as e:
                 logger.error(f"Failed to start file watchers: {e}")
                 self.notifier.error(f"File watcher initialization failed: {e}")
@@ -194,14 +192,10 @@ class CmdorcController:
         FIX #5: Uses call_soon_threadsafe to schedule async task from watcher thread.
         """
         if self._loop is None:
-            logger.warning(
-                f"File change for '{trigger_name}' ignored - controller not attached"
-            )
+            logger.warning(f"File change for '{trigger_name}' ignored - controller not attached")
             return
         # FIX #5: Thread-safe task scheduling
-        self._loop.call_soon_threadsafe(
-            lambda: self._loop.create_task(self.run_command(trigger_name))
-        )
+        self._loop.call_soon_threadsafe(lambda: self._loop.create_task(self.run_command(trigger_name)))
 
     # POLISH #1: Metadata only (no callables)
     @property
@@ -238,10 +232,7 @@ class CmdorcController:
 
         for cmd_name, key in self.keyboard_config.shortcuts.items():
             if key not in VALID_KEYS:
-                result.warnings.append(
-                    f"Invalid key '{key}' for command '{cmd_name}'. "
-                    f"Valid keys: 1-9, a-z, f1-f12"
-                )
+                result.warnings.append(f"Invalid key '{key}' for command '{cmd_name}'. Valid keys: 1-9, a-z, f1-f12")
 
             if cmd_name not in command_names:
                 result.warnings.append(f"Shortcut for '{cmd_name}' references unknown command")
@@ -249,8 +240,6 @@ class CmdorcController:
         # Keyboard conflicts
         for key, commands in self.keyboard_conflicts.items():
             if len(commands) > 1:
-                result.warnings.append(
-                    f"Duplicate key '{key}' for {', '.join(commands)} (last one wins)"
-                )
+                result.warnings.append(f"Duplicate key '{key}' for {', '.join(commands)} (last one wins)")
 
         return result

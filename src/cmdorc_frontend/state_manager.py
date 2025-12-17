@@ -1,8 +1,8 @@
 """State reconciliation logic - UI-agnostic command state synchronization."""
 
 import logging
-from typing import Protocol
 from pathlib import Path
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -113,4 +113,5 @@ class StateReconciler:
             Icon string
         """
         from cmdorc_frontend.models import map_run_state_to_icon
+
         return map_run_state_to_icon(state)

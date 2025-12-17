@@ -1,11 +1,11 @@
 """Shared data models for cmdorc_frontend."""
 
 from dataclasses import dataclass, field
-from typing import Literal
 from pathlib import Path
+from typing import Literal
 
 try:
-    from cmdorc import RunState, CommandConfig
+    from cmdorc import CommandConfig, RunState
 except ImportError:
     # Fallback for testing without cmdorc installed
     RunState = None

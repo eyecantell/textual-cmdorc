@@ -1,13 +1,14 @@
 """Phase 1 integration tests for state manager, widgets, and integrator."""
 
-import pytest
 from pathlib import Path
 
-from cmdorc_frontend.state_manager import StateReconciler
+import pytest
+
 from cmdorc_frontend.models import TriggerSource
-from textual_cmdorc.widgets import CmdorcCommandLink
-from textual_cmdorc.integrator import create_command_link, wire_all_callbacks
+from cmdorc_frontend.state_manager import StateReconciler
 from textual_cmdorc.controller import CmdorcController
+from textual_cmdorc.integrator import create_command_link, wire_all_callbacks
+from textual_cmdorc.widgets import CmdorcCommandLink
 
 
 @pytest.fixture
@@ -336,8 +337,8 @@ triggers = []
 
         # Should have warning about invalid key
         has_invalid_key_warning = any(
-            "ctrl+x" in str(w).lower() or "invalid" in str(w).lower()
-            for w in result.warnings
+            "ctrl+x" in str(w).lower() or "invalid" in str(w).lower() for w in result.warnings
         )
+        assert has_invalid_key_warning is True
         # Note: might not warn if validator is lenient, but should at least validate
         assert isinstance(result.warnings, list)

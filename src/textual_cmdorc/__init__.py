@@ -3,15 +3,15 @@
 __version__ = "0.1.0"
 
 # Public API - Embeddable components
-from textual_cmdorc.controller import CmdorcController
-from textual_cmdorc.view import CmdorcView
 from textual_cmdorc.app import CmdorcApp, HelpScreen
-
-# Keyboard integration
-from textual_cmdorc.keyboard_handler import KeyboardHandler, DuplicateIndicator
+from textual_cmdorc.controller import CmdorcController
 
 # For advanced usage
 from textual_cmdorc.integrator import create_command_link, wire_all_callbacks
+
+# Keyboard integration
+from textual_cmdorc.keyboard_handler import DuplicateIndicator, KeyboardHandler
+from textual_cmdorc.view import CmdorcView
 from textual_cmdorc.widgets import CmdorcCommandLink
 
 __all__ = [

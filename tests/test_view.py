@@ -1,10 +1,12 @@
 """Tests for CmdorcView - Phase 0 architecture."""
 
-import pytest
 from pathlib import Path
-from textual_cmdorc.view import CmdorcView
-from textual_cmdorc.controller import CmdorcController
+
+import pytest
+
 from cmdorc_frontend.models import PresentationUpdate, TriggerSource
+from textual_cmdorc.controller import CmdorcController
+from textual_cmdorc.view import CmdorcView
 
 
 @pytest.fixture
@@ -77,7 +79,7 @@ def test_view_command_links_empty_after_init(controller):
 
 def test_view_hierarchy_from_controller(controller):
     """Test view can access controller hierarchy."""
-    view = CmdorcView(controller)
+    CmdorcView(controller)
     hierarchy = controller.hierarchy
     assert len(hierarchy) > 0
     assert "Lint" in [node.name for node in hierarchy]
@@ -85,7 +87,7 @@ def test_view_hierarchy_from_controller(controller):
 
 def test_view_keyboard_config_access(controller):
     """Test view can access controller keyboard config."""
-    view = CmdorcView(controller)
+    CmdorcView(controller)
     keyboard_config = controller.keyboard_config
     assert keyboard_config.enabled is True
     assert "Lint" in keyboard_config.shortcuts
@@ -94,7 +96,7 @@ def test_view_keyboard_config_access(controller):
 
 def test_view_keyboard_hints_access(controller):
     """Test view can access controller keyboard hints (POLISH #1)."""
-    view = CmdorcView(controller)
+    CmdorcView(controller)
     hints = controller.keyboard_hints
     assert "1" in hints
     assert hints["1"] == "Lint"
@@ -221,15 +223,11 @@ def test_view_composition_without_log_pane(controller):
 
 def test_view_keyboard_shortcut_from_config(controller):
     """Test view can extract keyboard shortcut from config."""
-    view = CmdorcView(controller)
+    CmdorcView(controller)
 
     # Simulate what build_tree does
     node_name = "Lint"
-    shortcut = (
-        controller.keyboard_config.shortcuts.get(node_name)
-        if controller.keyboard_config.enabled
-        else None
-    )
+    shortcut = controller.keyboard_config.shortcuts.get(node_name) if controller.keyboard_config.enabled else None
 
     assert shortcut == "1"
 
@@ -250,22 +248,18 @@ triggers = []
 """
     )
     controller = CmdorcController(config, enable_watchers=False)
-    view = CmdorcView(controller)
+    CmdorcView(controller)
 
     # When disabled, shortcut should be None
     node_name = "Lint"
-    shortcut = (
-        controller.keyboard_config.shortcuts.get(node_name)
-        if controller.keyboard_config.enabled
-        else None
-    )
+    shortcut = controller.keyboard_config.shortcuts.get(node_name) if controller.keyboard_config.enabled else None
 
     assert shortcut is None
 
 
 def test_view_respects_controller_hierarchy(controller):
     """Test view respects the controller's command hierarchy."""
-    view = CmdorcView(controller)
+    CmdorcView(controller)
 
     hierarchy = controller.hierarchy
     assert len(hierarchy) >= 1
@@ -305,7 +299,7 @@ def test_view_duplicate_marker_logic(controller):
 
 def test_view_keyboard_conflicts_visibility(controller):
     """Test view can access keyboard conflicts from controller."""
-    view = CmdorcView(controller)
+    CmdorcView(controller)
     conflicts = controller.keyboard_conflicts
 
     # This config shouldn't have conflicts (each key is unique)
@@ -317,7 +311,7 @@ def test_view_initialization_preserves_controller_settings(controller):
     original_loop = controller._loop
     original_hierarchy_len = len(controller.hierarchy)
 
-    view = CmdorcView(controller)
+    CmdorcView(controller)
 
     # Controller should be unchanged
     assert controller._loop is original_loop
@@ -326,7 +320,7 @@ def test_view_initialization_preserves_controller_settings(controller):
 
 def test_view_trigger_source_compatibility(controller):
     """Test view can work with TriggerSource updates."""
-    view = CmdorcView(controller)
+    CmdorcView(controller)
 
     # Create a trigger source
     trigger = TriggerSource.from_trigger_chain(["file_changed", "command_success:Lint"])
