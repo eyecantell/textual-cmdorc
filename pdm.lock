@@ -5,7 +5,7 @@
 groups = ["default", "dev", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:e3d270226b4e0168cbfa8b753b457421a716bf222389986b7f0abcedc57f7a59"
+content_hash = "sha256:eee20a83da33162c215e41f7e1f865eef3c4c2ffff7e2e4a1d97a5b4c61cbcd7"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -1425,6 +1425,20 @@ dependencies = [
 files = [
     {file = "textual_dev-1.8.0-py3-none-any.whl", hash = "sha256:227b6d24a485fbbc77e302aa21f4fdf3083beb57eb45cd95bae082c81cbeddeb"},
     {file = "textual_dev-1.8.0.tar.gz", hash = "sha256:7e56867b0341405a95e938cac0647e6d2763d38d0df08710469ad6b6a8db76df"},
+]
+
+[[package]]
+name = "textual-filelink"
+version = "0.3.0"
+requires_python = ">=3.9"
+summary = "Clickable file links for Textual applications."
+groups = ["default"]
+dependencies = [
+    "textual>=6.6.0",
+]
+files = [
+    {file = "textual_filelink-0.3.0-py3-none-any.whl", hash = "sha256:b4095d1965eb4c5e4befcfaa4d3df638b3530870a366a3ec83ff5e9698810e84"},
+    {file = "textual_filelink-0.3.0.tar.gz", hash = "sha256:67a6e2fa68b8fea19750af096fd875f7532dc220958ecd217f23b21442f7ff0e"},
 ]
 
 [[package]]

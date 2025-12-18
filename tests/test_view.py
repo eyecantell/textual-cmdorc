@@ -56,25 +56,25 @@ def test_view_initialization_no_log_pane(controller):
 def test_view_duplicate_tracking_initialization(controller):
     """Test FIX #2: View initializes duplicate tracking."""
     view = CmdorcView(controller)
-    assert isinstance(view._command_links, dict)
-    assert len(view._command_links) == 0  # Empty before tree built
+    assert isinstance(view._command_widgets, dict)
+    assert len(view._command_widgets) == 0  # Empty before tree built
 
 
 def test_view_duplicate_tracking_structure(controller):
-    """Test FIX #2: _command_links tracks all instances per command."""
+    """Test FIX #2: _command_widgets tracks all instances per command."""
     view = CmdorcView(controller)
     # Simulate building tree with duplicates
-    view._command_links["TestCmd"] = []
-    view._command_links["TestCmd"].append("link1")
-    view._command_links["TestCmd"].append("link2")
+    view._command_widgets["TestCmd"] = []
+    view._command_widgets["TestCmd"].append("link1")
+    view._command_widgets["TestCmd"].append("link2")
 
-    assert len(view._command_links["TestCmd"]) == 2
+    assert len(view._command_widgets["TestCmd"]) == 2
 
 
-def test_view_command_links_empty_after_init(controller):
+def test_view_command_widgets_empty_after_init(controller):
     """Test command links are empty after initialization."""
     view = CmdorcView(controller)
-    assert view._command_links == {}
+    assert view._command_widgets == {}
 
 
 def test_view_hierarchy_from_controller(controller):
@@ -110,11 +110,23 @@ def test_view_update_command_with_single_instance(controller):
 
     # Create a mock link
     class MockLink:
-        def apply_update(self, update):
-            self.last_update = update
+        def __init__(self):
+            self.last_update = None
+            self.last_icon = None
+            self.last_tooltip = None
+            self.last_running = None
+            self.last_path = None
+
+        def set_status(self, icon=None, tooltip=None, running=None):
+            self.last_icon = icon
+            self.last_tooltip = tooltip
+            self.last_running = running
+
+        def set_output_path(self, path, tooltip=None):
+            self.last_path = path
 
     mock_link = MockLink()
-    view._command_links["TestCmd"] = [mock_link]
+    view._command_widgets["TestCmd"] = [mock_link]
 
     # Create update
     update = PresentationUpdate(
@@ -126,7 +138,10 @@ def test_view_update_command_with_single_instance(controller):
 
     # Apply update
     view.update_command("TestCmd", update)
-    assert mock_link.last_update is update
+    assert mock_link.last_icon == "✅"
+    assert mock_link.last_tooltip == "Test completed"
+    assert mock_link.last_running is False
+    assert mock_link.last_path == Path("/tmp/test.log")
 
 
 def test_view_update_command_with_duplicates(controller):
@@ -136,14 +151,21 @@ def test_view_update_command_with_duplicates(controller):
     # Create mock links for duplicate command
     class MockLink:
         def __init__(self):
-            self.last_update = None
+            self.last_icon = None
+            self.last_tooltip = None
+            self.last_running = None
 
-        def apply_update(self, update):
-            self.last_update = update
+        def set_status(self, icon=None, tooltip=None, running=None):
+            self.last_icon = icon
+            self.last_tooltip = tooltip
+            self.last_running = running
+
+        def set_output_path(self, path, tooltip=None):
+            pass
 
     link1 = MockLink()
     link2 = MockLink()
-    view._command_links["DuplicateCmd"] = [link1, link2]
+    view._command_widgets["DuplicateCmd"] = [link1, link2]
 
     # Create update
     update = PresentationUpdate(
@@ -156,8 +178,12 @@ def test_view_update_command_with_duplicates(controller):
     view.update_command("DuplicateCmd", update)
 
     # Both should receive update
-    assert link1.last_update is update
-    assert link2.last_update is update
+    assert link1.last_icon == "⏳"
+    assert link1.last_running is True
+    assert link1.last_tooltip == "Running..."
+    assert link2.last_icon == "⏳"
+    assert link2.last_running is True
+    assert link2.last_tooltip == "Running..."
 
 
 def test_view_update_nonexistent_command(controller):
@@ -179,32 +205,32 @@ def test_view_duplicate_detection_logic(controller):
     view = CmdorcView(controller)
 
     # Manually test the duplicate detection logic
-    view._command_links["Cmd1"] = []
-    occurrence_count = len(view._command_links.get("Cmd1", []))
+    view._command_widgets["Cmd1"] = []
+    occurrence_count = len(view._command_widgets.get("Cmd1", []))
     is_duplicate_1 = occurrence_count > 0
     assert is_duplicate_1 is False
 
     # Add first instance
-    view._command_links["Cmd1"].append("link1")
+    view._command_widgets["Cmd1"].append("link1")
 
     # Check for second instance
-    occurrence_count = len(view._command_links.get("Cmd1", []))
+    occurrence_count = len(view._command_widgets.get("Cmd1", []))
     is_duplicate_2 = occurrence_count > 0
     assert is_duplicate_2 is True
 
 
-def test_view_clear_command_links(controller):
+def test_view_clear_command_widgets(controller):
     """Test clearing command links."""
     view = CmdorcView(controller)
 
     # Populate
-    view._command_links["Cmd1"] = ["link1"]
-    view._command_links["Cmd2"] = ["link2", "link3"]
-    assert len(view._command_links) == 2
+    view._command_widgets["Cmd1"] = ["link1"]
+    view._command_widgets["Cmd2"] = ["link2", "link3"]
+    assert len(view._command_widgets) == 2
 
     # Clear
-    view._command_links.clear()
-    assert len(view._command_links) == 0
+    view._command_widgets.clear()
+    assert len(view._command_widgets) == 0
 
 
 def test_view_composition_with_log_pane(controller):
@@ -285,15 +311,15 @@ def test_view_duplicate_marker_logic(controller):
     view = CmdorcView(controller)
 
     # Test case: first occurrence should not be marked duplicate
-    view._command_links["Cmd"] = []
-    is_duplicate_first = len(view._command_links.get("Cmd", [])) > 0
+    view._command_widgets["Cmd"] = []
+    is_duplicate_first = len(view._command_widgets.get("Cmd", [])) > 0
     assert is_duplicate_first is False
 
     # Add link
-    view._command_links["Cmd"].append("link1")
+    view._command_widgets["Cmd"].append("link1")
 
     # Test case: second occurrence should be marked duplicate
-    is_duplicate_second = len(view._command_links.get("Cmd", [])) > 0
+    is_duplicate_second = len(view._command_widgets.get("Cmd", [])) > 0
     assert is_duplicate_second is True
 
 

@@ -1,14 +1,14 @@
-"""Textual widget for rendering cmdorc command tree. Suitable for embedding."""
+"""Textual widget for rendering cmdorc command list. Suitable for embedding."""
 
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.widget import Widget
-from textual.widgets import Log, Tree
+from textual.widgets import Log
 
 from textual_cmdorc.controller import CmdorcController
 
 
 class CmdorcView(Widget):
-    """Textual widget for rendering cmdorc command tree. Suitable for embedding."""
+    """Textual widget for rendering cmdorc command list with indentation. Suitable for embedding."""
 
     DEFAULT_CSS = """
     CmdorcView {
@@ -42,8 +42,7 @@ class CmdorcView(Widget):
         self.show_log_pane = show_log_pane
         self.enable_local_bindings = enable_local_bindings
         # FIX #2: Track all instances of each command to detect duplicates
-        self._command_links: dict[str, list] = {}
-        self._command_nodes: dict[str, list] = {}  # Store tree node references
+        self._command_widgets: dict[str, list] = {}
         self.log_pane: Log | None = None
 
     @property
@@ -53,22 +52,22 @@ class CmdorcView(Widget):
 
     @controller.setter
     def controller(self, value: CmdorcController | None) -> None:
-        """Set the controller and rebuild tree if needed."""
+        """Set the controller and rebuild list if needed."""
         self._controller = value
-        # If view is already mounted and controller is now set, rebuild the tree
+        # If view is already mounted and controller is now set, rebuild the list
         if value is not None and self.is_mounted:
             try:
-                tree = self.query_one("#command-tree", Tree)
-                tree.clear()
-                self._build_tree(tree, value.hierarchy)
+                container = self.query_one("#command-list", Vertical)
+                container.remove_children()
+                self._build_command_list(container, value.hierarchy, indent=0)
             except Exception:
-                # Silently fail if tree doesn't exist yet
+                # Silently fail if container doesn't exist yet
                 pass
 
     def compose(self):
-        """Compose tree and optional log pane."""
-        with VerticalScroll(id="tree-container"):
-            yield Tree("Commands", id="command-tree")
+        """Compose command list and optional log pane."""
+        with VerticalScroll(id="commands-container"):
+            yield Vertical(id="command-list")
 
         # Optional log pane
         if self.show_log_pane:
@@ -76,19 +75,24 @@ class CmdorcView(Widget):
             yield self.log_pane
 
     def on_mount(self) -> None:
-        """Build command tree from controller.hierarchy."""
+        """Build command list from controller.hierarchy."""
         # Handle case where controller might be None during initial mount
         if self.controller is None:
             return
-        tree = self.query_one("#command-tree", Tree)
-        self._build_tree(tree, self.controller.hierarchy)
+        container = self.query_one("#command-list", Vertical)
+        self._build_command_list(container, self.controller.hierarchy, indent=0)
 
-    def _build_tree(self, tree, nodes, parent=None):
-        """Recursively build tree from CommandNode hierarchy.
+    def _build_command_list(self, container, nodes, indent=0):
+        """Recursively build command list with indentation.
 
         FIX #2: Tracks command occurrences to detect duplicates and mark them.
+
+        Args:
+            container: Vertical container to add widgets to
+            nodes: List of CommandNode to render
+            indent: Indentation level (0, 1, 2, ...)
         """
-        from textual_cmdorc.integrator import create_command_link
+        from textual_cmdorc.integrator import create_command_widget
 
         for node in nodes:
             # Get keyboard shortcut for this command
@@ -99,45 +103,36 @@ class CmdorcView(Widget):
             )
 
             # FIX #2: Detect if this is a duplicate (appeared before)
-            occurrence_count = len(self._command_links.get(node.name, []))
+            occurrence_count = len(self._command_widgets.get(node.name, []))
             is_duplicate = occurrence_count > 0
 
-            # Create link with shortcut and duplicate indicator
-            link = create_command_link(node, self.controller.orchestrator, keyboard_shortcut=shortcut)
-            link.is_duplicate = is_duplicate  # FIX #2: Mark duplicates
+            # Create command widget with indentation and duplicate indicator
+            widget = create_command_widget(
+                node,
+                self.controller.orchestrator,
+                keyboard_shortcut=shortcut,
+                indent=indent,
+                is_duplicate=is_duplicate,
+            )
 
             # FIX #2: Store all instances of this command
-            if node.name not in self._command_links:
-                self._command_links[node.name] = []
-            self._command_links[node.name].append(link)
+            if node.name not in self._command_widgets:
+                self._command_widgets[node.name] = []
+            self._command_widgets[node.name].append(widget)
 
-            # Refresh tooltips to reflect duplicate status
-            if hasattr(link, "_update_tooltips"):
-                link._update_tooltips()
+            # Add to container
+            container.mount(widget)
 
-            # Add to tree
-            if parent is None:
-                tree.root.label = "Commands"
-                tree_node = tree.root.add(link.get_label(), data=link)
-            else:
-                tree_node = parent.add(link.get_label(), data=link)
-
-            # Store tree node reference for updates
-            if node.name not in self._command_nodes:
-                self._command_nodes[node.name] = []
-            self._command_nodes[node.name].append(tree_node)
-
-            # Recursively add children
+            # Recursively add children with more indentation
             if node.children:
-                self._build_tree(tree, node.children, tree_node)
+                self._build_command_list(container, node.children, indent + 1)
 
     def refresh_tree(self) -> None:
-        """Rebuild tree from controller.hierarchy."""
-        tree = self.query_one("#command-tree", Tree)
-        tree.clear()
-        self._command_links.clear()
-        self._command_nodes.clear()
-        self._build_tree(tree, self.controller.hierarchy)
+        """Rebuild list from controller.hierarchy."""
+        container = self.query_one("#command-list", Vertical)
+        container.remove_children()
+        self._command_widgets.clear()
+        self._build_command_list(container, self.controller.hierarchy, indent=0)
 
     def update_command(self, name: str, update) -> None:
         """Update display of specific command.
@@ -146,10 +141,18 @@ class CmdorcView(Widget):
             name: Command name
             update: PresentationUpdate with new display state
         """
-        if name in self._command_links:
-            for i, link in enumerate(self._command_links[name]):
-                if hasattr(link, "apply_update"):
-                    link.apply_update(update)
-                # Update tree node label to reflect new status
-                if name in self._command_nodes and i < len(self._command_nodes[name]):
-                    self._command_nodes[name][i].label = link.get_label()
+        if name in self._command_widgets:
+            for widget in self._command_widgets[name]:
+                if hasattr(widget, "set_status"):
+                    widget.set_status(
+                        icon=update.icon,
+                        tooltip=update.tooltip,
+                        running=update.running,
+                    )
+
+                    if update.output_path:
+                        from pathlib import Path
+                        widget.set_output_path(
+                            Path(update.output_path),
+                            tooltip="Click to view output",
+                        )

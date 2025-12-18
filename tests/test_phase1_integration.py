@@ -8,7 +8,7 @@ from cmdorc_frontend.models import TriggerSource
 from cmdorc_frontend.state_manager import StateReconciler
 from textual_cmdorc.controller import CmdorcController
 from textual_cmdorc.integrator import create_command_link, wire_all_callbacks
-from textual_cmdorc.widgets import CmdorcCommandLink
+from textual_cmdorc.widgets import CmdorcCommandLinkData
 
 
 @pytest.fixture
@@ -102,7 +102,7 @@ class TestCmdorcCommandLinkEnhancements:
     def test_link_semantic_tooltip_running(self):
         """Test semantic tooltip generation for running state."""
         config = self.create_mock_config("TestCmd")
-        link = CmdorcCommandLink(config, keyboard_shortcut="1")
+        link = CmdorcCommandLinkData(config, keyboard_shortcut="1")
 
         # Set to running with trigger chain
         link.is_running = True
@@ -117,7 +117,7 @@ class TestCmdorcCommandLinkEnhancements:
     def test_link_semantic_tooltip_idle(self):
         """Test semantic tooltip generation for idle state."""
         config = self.create_mock_config("TestCmd")
-        link = CmdorcCommandLink(config, keyboard_shortcut="2")
+        link = CmdorcCommandLinkData(config, keyboard_shortcut="2")
 
         # Set to idle
         link.is_running = False
@@ -130,7 +130,7 @@ class TestCmdorcCommandLinkEnhancements:
     def test_link_tooltip_with_duplicate_indicator(self):
         """Test tooltip with duplicate command indicator."""
         config = self.create_mock_config("Lint")
-        link = CmdorcCommandLink(config, keyboard_shortcut="1", is_duplicate=True)
+        link = CmdorcCommandLinkData(config, keyboard_shortcut="1", is_duplicate=True)
 
         link.is_running = False
         link._update_tooltips()
@@ -142,7 +142,7 @@ class TestCmdorcCommandLinkEnhancements:
     def test_link_set_running_compatibility(self):
         """Test set_running method for StateReconciler compatibility."""
         config = self.create_mock_config()
-        link = CmdorcCommandLink(config)
+        link = CmdorcCommandLinkData(config)
 
         link.set_running(True, "Running test tooltip")
 
@@ -152,7 +152,7 @@ class TestCmdorcCommandLinkEnhancements:
     def test_link_set_result_compatibility(self):
         """Test set_result method for StateReconciler compatibility."""
         config = self.create_mock_config()
-        link = CmdorcCommandLink(config)
+        link = CmdorcCommandLinkData(config)
         output_path = Path("/tmp/output.log")
 
         link.set_result("✅", "Test passed", output_path)
@@ -165,7 +165,7 @@ class TestCmdorcCommandLinkEnhancements:
     def test_link_command_name_property(self):
         """Test command_name property for StateReconciler protocol."""
         config = self.create_mock_config("MyCommand")
-        link = CmdorcCommandLink(config)
+        link = CmdorcCommandLinkData(config)
 
         assert link.command_name == "MyCommand"
 
@@ -228,7 +228,7 @@ class TestTriggerSourceIntegration:
     def test_trigger_source_semantic_summary_in_tooltip(self):
         """Test semantic summary appears in widget tooltips."""
         config_mock = type("Config", (), {"name": "Test", "command": "echo test", "triggers": []})()
-        link = CmdorcCommandLink(config_mock)
+        link = CmdorcCommandLinkData(config_mock)
 
         # Simulate running with file trigger
         link.is_running = True
@@ -241,7 +241,7 @@ class TestTriggerSourceIntegration:
     def test_trigger_chain_formatting_in_tooltip(self):
         """Test full trigger chain appears in tooltip."""
         config_mock = type("Config", (), {"name": "Test", "command": "echo test", "triggers": []})()
-        link = CmdorcCommandLink(config_mock)
+        link = CmdorcCommandLinkData(config_mock)
 
         # Simulate complex trigger chain
         trigger = TriggerSource.from_trigger_chain(
@@ -267,7 +267,7 @@ class TestKeyboardConfigIntegration:
         node = controller.hierarchy[0]
         shortcut = controller.keyboard_config.shortcuts.get(node.name)
 
-        link = CmdorcCommandLink(node.config, keyboard_shortcut=shortcut)
+        link = CmdorcCommandLinkData(node.config, keyboard_shortcut=shortcut)
         link._update_tooltips()
 
         if shortcut:
