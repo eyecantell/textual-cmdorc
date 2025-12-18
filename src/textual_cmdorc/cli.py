@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from textual_cmdorc import __version__
-from textual_cmdorc.app import CmdorcApp
+from textual_cmdorc.simple_app import SimpleApp
 
 # Default config template for Python development workflows
 DEFAULT_CONFIG_TEMPLATE = """\
@@ -129,7 +129,7 @@ def main() -> None:
             sys.exit(1)
 
         # Launch the app
-        app = CmdorcApp(config_path=str(config_path))
+        app = SimpleApp(config_path=str(config_path))
         app.run()
 
     except KeyboardInterrupt:
