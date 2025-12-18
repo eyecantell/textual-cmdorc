@@ -192,23 +192,25 @@ class CmdorcApp(App):
 
     def compose(self) -> ComposeResult:
         """Compose app layout."""
+        # Create controller BEFORE view so it exists when view needs it
+        # In standalone mode, watchers auto-start on attach() in on_mount()
+        self.controller = CmdorcController(
+            self.config_path,
+            enable_watchers=True,
+        )
+
         yield Header()
         self.view = CmdorcView(self.controller, show_log_pane=self._show_log)
         yield self.view
         yield Footer()
 
     async def on_mount(self) -> None:
-        """Initialize controller, keyboard handler, and attach to event loop.
+        """Attach controller to event loop and start file watchers.
 
         RECOMMENDATION #3: Get validation from controller, display only.
         Should-fix #2: Only show validation summary if warnings/errors exist.
         """
         try:
-            # Create controller
-            self.controller = CmdorcController(
-                self.config_path,
-                enable_watchers=True,  # Auto-start watchers in standalone mode
-            )
 
             # Wire validation callback
             if hasattr(self.controller, "on_validation_result"):
@@ -338,44 +340,22 @@ class CmdorcApp(App):
         else:
             logger.warning(f"Cannot run command '{command_name}': controller not initialized")
 
-    def on_key(self, event: Key) -> None:
-        """Route number keys to commands - triggers play/stop toggle.
-
-        This allows keyboard shortcuts to work globally without focus.
-        Number keys 1-9, a-z, f1-f12 can trigger commands.
-
-        Args:
-            event: Key event
-        """
-        if not self.controller:
-            return
-
-        # Get keyboard hints (mapping of key -> command_name)
-        keyboard_hints = self.controller.keyboard_hints
-
-        if event.key in keyboard_hints:
-            command_name = keyboard_hints[event.key]
-
-            # Find the command widget and toggle its play/stop state
-            if self.view:
-                if command_name in self.view._command_widgets:
-                    for widget in self.view._command_widgets[command_name]:
-                        if isinstance(widget, CmdorcCommandLink):
-                            # Toggle play/stop via the command_link widget
-                            if hasattr(widget.command_link, "action_play_stop"):
-                                widget.command_link.action_play_stop()
-                            event.prevent_default()
-                            return
-
     def on_command_link_play_clicked(self, message: CommandLink.PlayClicked) -> None:
         """Handle play button clicks - start command execution.
 
         Args:
             message: CommandLink.PlayClicked message
         """
-        if self.controller:
-            # Use request_run (sync-safe)
-            self.controller.request_run(message.name)
+        logger.debug(f"Play clicked: {message.name}")
+
+        if not self.controller:
+            logger.error(f"Cannot start {message.name}: controller not initialized")
+            self.notify(f"Error: Controller not ready", severity="error")
+            return
+
+        logger.info(f"Starting command: {message.name}")
+        # Use request_run (sync-safe) since this is called from UI context
+        self.controller.request_run(message.name)
 
     def on_command_link_stop_clicked(self, message: CommandLink.StopClicked) -> None:
         """Handle stop button clicks - cancel command execution.
@@ -383,9 +363,16 @@ class CmdorcApp(App):
         Args:
             message: CommandLink.StopClicked message
         """
-        if self.controller:
-            # Use request_cancel (sync-safe)
-            self.controller.request_cancel(message.name)
+        logger.debug(f"Stop clicked: {message.name}")
+
+        if not self.controller:
+            logger.error(f"Cannot stop {message.name}: controller not initialized")
+            self.notify(f"Error: Controller not ready", severity="error")
+            return
+
+        logger.info(f"Stopping command: {message.name}")
+        # Use request_cancel (sync-safe) since this is called from UI context
+        self.controller.request_cancel(message.name)
 
     def on_command_link_settings_clicked(self, message: CommandLink.SettingsClicked) -> None:
         """Handle settings icon clicks - show command settings menu.
@@ -393,6 +380,7 @@ class CmdorcApp(App):
         Args:
             message: CommandLink.SettingsClicked message
         """
+        logger.debug(f"Settings clicked: {message.name}")
         # TODO: Implement settings menu in future
         self.notify(f"Settings for {message.name} (not implemented yet)")
 

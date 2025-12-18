@@ -1,10 +1,13 @@
 """Textual widget for rendering cmdorc command list. Suitable for embedding."""
 
+import logging
 from textual.containers import Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Log
 
 from textual_cmdorc.controller import CmdorcController
+
+logger = logging.getLogger(__name__)
 
 
 class CmdorcView(Widget):
@@ -60,9 +63,10 @@ class CmdorcView(Widget):
                 container = self.query_one("#command-list", Vertical)
                 container.remove_children()
                 self._build_command_list(container, value.hierarchy, indent=0)
-            except Exception:
-                # Silently fail if container doesn't exist yet
-                pass
+            except Exception as e:
+                # Log the exception instead of silently swallowing it
+                logger.exception(f"Failed to build command list: {e}")
+                raise  # Re-raise to make the error visible
 
     def compose(self):
         """Compose command list and optional log pane."""

@@ -63,7 +63,13 @@ class CmdorcCommandLink(Horizontal):
             initial_status_icon: Initial status icon (default: ❓)
             output_path: Path to output file (if any)
         """
+        # Initialize command_link BEFORE calling super().__init__()
+        # This is critical because Textual's widget init tries to set _tooltip property,
+        # which needs command_link to exist (see line ~180)
+        self.command_link = None
+
         super().__init__()
+
         self.command_name = command_name
         self.keyboard_shortcut = keyboard_shortcut
         self.indent_level = indent
@@ -80,15 +86,22 @@ class CmdorcCommandLink(Horizontal):
         tooltip = self._build_tooltip()
 
         # Store the CommandLink widget
-        self.command_link = CommandLink(
-            name=command_name,
-            output_path=output_path,
-            initial_status_icon=initial_status_icon,
-            initial_status_tooltip=tooltip,
-            show_toggle=False,  # Hide toggle (not needed for cmdorc)
-            show_settings=True,  # Show settings icon
-            show_remove=False,  # Hide remove (not needed for cmdorc)
-        )
+        try:
+            self.command_link = CommandLink(
+                name=command_name,
+                output_path=output_path,
+                initial_status_icon=initial_status_icon,
+                initial_status_tooltip=tooltip,
+                show_toggle=False,  # Hide toggle (not needed for cmdorc)
+                show_settings=True,  # Show settings icon
+                show_remove=False,  # Hide remove (not needed for cmdorc)
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to create CommandLink for '{command_name}': {e}",
+                exc_info=True,
+            )
+            raise
 
     def compose(self):
         """Compose indentation + command link."""
@@ -97,8 +110,9 @@ class CmdorcCommandLink(Horizontal):
         if indent_text:
             yield Static(indent_text, classes="indent")
 
-        # Add the CommandLink widget
-        yield self.command_link
+        # Add the CommandLink widget (only if it was successfully created)
+        if self.command_link is not None:
+            yield self.command_link
 
     def _build_tooltip(self) -> str:
         """Build tooltip text."""
@@ -123,7 +137,8 @@ class CmdorcCommandLink(Horizontal):
             tooltip: New tooltip text
             running: Whether command is running (shows spinner)
         """
-        self.command_link.set_status(icon=icon, tooltip=tooltip, running=running)
+        if self.command_link is not None:
+            self.command_link.set_status(icon=icon, tooltip=tooltip, running=running)
 
     def set_output_path(self, path: Path | None, tooltip: str | None = None) -> None:
         """Update output file path.
@@ -132,7 +147,8 @@ class CmdorcCommandLink(Horizontal):
             path: Path to output file
             tooltip: Tooltip for the command name link
         """
-        self.command_link.set_output_path(path, tooltip=tooltip)
+        if self.command_link is not None:
+            self.command_link.set_output_path(path, tooltip=tooltip)
 
     # Backward compatibility properties
     @property
