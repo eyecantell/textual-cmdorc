@@ -161,7 +161,13 @@ For upgrading from pre-release versions:
 
 ## [Unreleased]
 
-(No unreleased changes at this time)
+### Added
+- **Command Preview Tooltips**: Play/stop buttons now show resolved commands using `orchestrator.preview_command()` and `handle.resolved_command`
+  - Idle state: Play button displays command preview with variables resolved (e.g., `pytest ./tests -v`)
+  - Running state: Stop button shows the actual command being executed
+  - Completed state: Returns to command preview
+  - Status icon tooltips unchanged (still show triggers, shortcuts, and last run info)
+  - Requires textual-filelink 0.5.0+ for `run_tooltip`/`stop_tooltip` parameters
 
 ---
 

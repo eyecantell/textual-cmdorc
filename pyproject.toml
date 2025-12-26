@@ -39,7 +39,7 @@ dependencies = [
     "textual>=6.6.0",
     "cmdorc>=0.3.0",
     "watchdog>=4.0.0",
-    "textual-filelink>=0.4.1",
+    "textual-filelink>=0.5.0",
 ]
 
 [project.scripts]

@@ -5,7 +5,7 @@
 groups = ["default", "dev", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:1a8ce4eef947599c5b7d46fbafc91dd22557b9aa500536cb6459f4845acc2ce7"
+content_hash = "sha256:2a4c5568c5aaa2c1e0b9db92ab0b6705149c0a4354421bc62e62e13747bebb41"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -1429,7 +1429,7 @@ files = [
 
 [[package]]
 name = "textual-filelink"
-version = "0.4.1"
+version = "0.5.0"
 requires_python = ">=3.9"
 summary = "Clickable file links with icons, toggles, and command orchestration widget for Textual TUI applications."
 groups = ["default"]
@@ -1437,8 +1437,8 @@ dependencies = [
     "textual>=6.11.0",
 ]
 files = [
-    {file = "textual_filelink-0.4.1-py3-none-any.whl", hash = "sha256:1fd08b6b8a7da21911c9c24666c5d31f893fd442cf919ab296bca51c16950d48"},
-    {file = "textual_filelink-0.4.1.tar.gz", hash = "sha256:28d64eeb81661871894639aae561c1201b97b1b213d87954521d06300a1ded09"},
+    {file = "textual_filelink-0.5.0-py3-none-any.whl", hash = "sha256:e33e9d525c26e3031b0225f704e2b2bf59bcdf9564ab62233cc904fab93fd6fa"},
+    {file = "textual_filelink-0.5.0.tar.gz", hash = "sha256:e30edcfdeac3c69d11ca16ce34d5a55a06ca1ce5755084cdd92ff6f8f6596690"},
 ]
 
 [[package]]

@@ -24,7 +24,9 @@ A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmd
 - ⚡ **Trigger Chains**: Commands automatically trigger other commands based on success/failure
 
 ### UX Enhancements
-- 💡 **Smart Tooltips**: Show trigger sources, keyboard hints, and last run details
+- 💡 **Smart Tooltips**: Two tooltip systems for maximum clarity
+  - **Status icons** (◯/⏳/✅/❌): Show trigger sources, keyboard hints, and last run details
+  - **Play/Stop buttons** (▶️/⏹️): Display resolved command preview (e.g., `pytest ./tests -v`)
 - ⌨️ **Global Keyboard Shortcuts**: Configurable hotkeys (1-9, a-z, f1-f12) to run/stop commands
 - 🎯 **Help Screen**: Press `[h]` to see all keyboard shortcuts
 - 🔄 **Live Reload**: Press `[r]` to reload configuration without restarting

@@ -179,6 +179,11 @@ class SimpleApp(App):
                             show_settings=True,
                             tooltip=self._get_command_string(cmd_name),
                         )
+                        # Set play/stop button tooltip to show command preview
+                        link.set_play_stop_tooltips(
+                            run_tooltip=self._get_command_string(cmd_name),
+                            append_shortcuts=False,
+                        )
                         self.file_list.add_item(link)
                     except Exception as e:
                         # Config error - show warning icon
@@ -357,20 +362,28 @@ class SimpleApp(App):
 
         link = self._get_link(name)
         if link:
-            # Build tooltip - handle may be None for command_started events
+            # Build status icon tooltip - handle may be None for command_started events
             if handle:
-                tooltip = self._build_running_tooltip(name, handle)
+                status_tooltip = self._build_running_tooltip(name, handle)
             else:
                 # Generic running tooltip when handle not yet available
-                tooltip = "Running..."
+                status_tooltip = "Running..."
                 shortcut = self.adapter.keyboard_config.shortcuts.get(name) if self.adapter else None
                 if shortcut:
-                    tooltip += f"\n[{shortcut}] to stop"
+                    status_tooltip += f"\n[{shortcut}] to stop"
+
+            # Build stop button tooltip with resolved command
+            if handle and handle.resolved_command:
+                stop_tooltip = f"Stop — {handle.resolved_command.command}"
+            else:
+                stop_tooltip = "Stop command"
 
             link.set_status(
                 running=True,
                 icon="⏳",
-                tooltip=tooltip,
+                tooltip=status_tooltip,
+                stop_tooltip=stop_tooltip,
+                append_shortcuts=False,
             )
 
     def _on_command_success(self, name: str, handle: RunHandle) -> None:
@@ -389,7 +402,10 @@ class SimpleApp(App):
                 running=False,
                 icon="✅",
                 tooltip=self._build_result_tooltip(name, handle),
+                run_tooltip=self._get_command_string(name),
+                append_shortcuts=False,
             )
+
             # Update output_path if available
             if handle.output_file:
                 link.output_path = handle.output_file
@@ -410,7 +426,10 @@ class SimpleApp(App):
                 running=False,
                 icon="❌",
                 tooltip=self._build_result_tooltip(name, handle),
+                run_tooltip=self._get_command_string(name),
+                append_shortcuts=False,
             )
+
             # Update output_path if available
             if handle.output_file:
                 link.output_path = handle.output_file
@@ -431,7 +450,10 @@ class SimpleApp(App):
                 running=False,
                 icon="⚠️",
                 tooltip=self._build_result_tooltip(name, handle),
+                run_tooltip=self._get_command_string(name),
+                append_shortcuts=False,
             )
+
             # Update output_path if available
             if handle.output_file:
                 link.output_path = handle.output_file
@@ -441,7 +463,7 @@ class SimpleApp(App):
     # ========================================================================
 
     def _build_idle_tooltip(self, cmd_name: str) -> str:
-        """Build tooltip for idle command.
+        """Build tooltip for idle command status icon.
 
         Shows:
         - Configured triggers
@@ -478,7 +500,7 @@ class SimpleApp(App):
             return f"Error: {e}"
 
     def _build_running_tooltip(self, cmd_name: str, handle: RunHandle) -> str:
-        """Build tooltip for running command.
+        """Build tooltip for running command status icon.
 
         Shows:
         - Semantic summary ("Ran automatically (file change)")
@@ -515,7 +537,7 @@ class SimpleApp(App):
             return "Running..."
 
     def _build_result_tooltip(self, cmd_name: str, handle: RunHandle) -> str:
-        """Build tooltip for completed command.
+        """Build tooltip for completed command status icon.
 
         Shows:
         - Last trigger chain with status
@@ -678,7 +700,7 @@ class SimpleApp(App):
     # ========================================================================
 
     def _get_command_string(self, cmd_name: str) -> str:
-        """Get resolved command string for a command.
+        """Get resolved command string for a command using preview_command().
 
         Args:
             cmd_name: Command name
@@ -690,10 +712,8 @@ class SimpleApp(App):
             return "No adapter"
 
         try:
-            config = self.adapter.orchestrator._runtime.get_command(cmd_name)
-            if not config:
-                return "Command not found"
-            return config.command
+            preview = self.adapter.orchestrator.preview_command(cmd_name)
+            return preview.command
         except Exception as e:
             logger.error(f"Failed to get command string for {cmd_name}: {e}")
             return f"Error: {e}"

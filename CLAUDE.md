@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Status:** Production ready (59 tests, 29% coverage)
 - **Python:** 3.10+
-- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.3.0+, watchdog 4.0.0+, textual-filelink 0.4.1+
+- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.3.0+, watchdog 4.0.0+, textual-filelink 0.5.0+
 
 ## Common Development Commands
 
@@ -119,16 +119,23 @@ User clicks Play or presses [1]
     → _on_command_success/failed/cancelled() → Update UI to ✅/❌/⚠️
 ```
 
-### Tooltip States
-When a command runs, tooltips show different information based on state:
+### Tooltip Architecture
+Commands have two separate tooltip systems for better UX:
 
-**Idle:** `Triggers: py_file_changed, manual\n[1] to run`
+**Status Icon Tooltips** (◯/⏳/✅/❌/⚠️) - Show trigger info and state:
+- **Idle:** `Triggers: py_file_changed, manual\n[1] to run`
+- **Running:** `Stop — Ran automatically (file change)\npy_file_changed\n[1] to stop`
+- **Result:** `Last run: py_file_changed (✅ 2s ago)\nDuration: 1.5s\n[1] to run again`
 
-**Running:** `Stop — Ran automatically (file change)\npy_file_changed\n[1] to stop`
+**Play/Stop Button Tooltips** (▶️/⏹️) - Show resolved command:
+- **Idle:** Shows command preview from `orchestrator.preview_command()` (e.g., `pytest ./tests -v`)
+- **Running:** Shows resolved command being executed from `handle.resolved_command` (e.g., `Stop — pytest ./tests -v`)
+- **Completed:** Restores to command preview
 
-**Result:** `Last run: py_file_changed (✅ 2s ago)\nDuration: 1.5s\n[1] to run again`
-
-Logic is in `SimpleApp._build_idle_tooltip()`, `_build_running_tooltip()`, `_build_result_tooltip()` and `TriggerSource` model methods.
+Logic is in:
+- Status icon tooltips: `_build_idle_tooltip()`, `_build_running_tooltip()`, `_build_result_tooltip()`
+- Play/Stop button tooltips: `_get_command_string()` uses `preview_command()`, updated via `set_status(run_tooltip=..., stop_tooltip=...)`
+- Command name tooltip: Shows name with keyboard shortcuts (configured in CommandLink)
 
 ## Configuration Extensions
 
@@ -280,7 +287,7 @@ from textual_cmdorc import CmdorcController  # Doesn't exist anymore!
 
 - **cmdorc** (0.3.0+) - Core orchestration engine (source of truth for state)
 - **textual** (6.6.0+) - TUI framework (App, widgets, styling)
-- **textual-filelink** (0.4.1+) - CommandLink widget with play/stop/settings buttons
+- **textual-filelink** (0.5.0+) - CommandLink widget with play/stop/settings buttons and tooltip support
 - **watchdog** (4.0.0+) - File system event monitoring
 
 ## Key Gotchas
