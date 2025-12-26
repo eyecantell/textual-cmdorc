@@ -196,6 +196,7 @@ class SimpleApp(App):
             # Wire lifecycle callbacks for all commands
             for cmd_name in self.adapter.get_command_names():
                 # Started event (via orchestrator.on_event)
+                logger.debug(f"Wiring command_started:{cmd_name} callback")
                 self.adapter.orchestrator.on_event(
                     f"command_started:{cmd_name}",
                     lambda h, ctx, name=cmd_name: self._on_command_started(name, h),
@@ -347,21 +348,29 @@ class SimpleApp(App):
 
         Args:
             name: Command name
-            handle: RunHandle for the started run
+            handle: RunHandle for the started run (may be None for command_started events)
         """
-        if not handle:
-            logger.warning(f"Command started event for {name} without handle")
-            return
+        logger.debug(f"_on_command_started called for {name}, handle={handle}")
 
         logger.info(f"Command started: {name}")
         self.running_commands.add(name)
 
         link = self._get_link(name)
         if link:
+            # Build tooltip - handle may be None for command_started events
+            if handle:
+                tooltip = self._build_running_tooltip(name, handle)
+            else:
+                # Generic running tooltip when handle not yet available
+                tooltip = "Running..."
+                shortcut = self.adapter.keyboard_config.shortcuts.get(name) if self.adapter else None
+                if shortcut:
+                    tooltip += f"\n[{shortcut}] to stop"
+
             link.set_status(
                 running=True,
                 icon="⏳",
-                tooltip=self._build_running_tooltip(name, handle),
+                tooltip=tooltip,
             )
 
     def _on_command_success(self, name: str, handle: RunHandle) -> None:
