@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**textual-cmdorc** is an embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmdorc) command orchestration. It displays hierarchical command workflows with real-time status updates, manual controls, and trigger inputs.
+**textual-cmdorc** is an embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmdorc) command orchestration. It displays commands in a flat list with real-time status updates, manual controls, and file watching.
 
-- **Status:** Beta (v0.1.0) - Production ready with 137 tests, 47%+ coverage
+- **Status:** Production ready (59 tests, 29% coverage)
 - **Python:** 3.10+
-- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.2.1+, watchdog 4.0.0+
+- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.3.0+, watchdog 4.0.0+, textual-filelink 0.4.1+
 
 ## Common Development Commands
 
@@ -20,10 +20,10 @@ pdm install -G test -G lint -G dev
 pdm run pytest --cov
 
 # Run specific test file
-pdm run pytest tests/test_controller.py -v
+pdm run pytest tests/test_cli.py -v
 
 # Run single test
-pdm run pytest tests/test_controller.py::test_name -v
+pdm run pytest tests/test_cli.py::test_name -v
 
 # Lint code
 pdm run ruff check .
@@ -34,11 +34,11 @@ pdm run ruff format .
 # Type checking
 pdm run mypy src/
 
-# Live development (watch mode for Textual)
-pdm run textual-dev
-
 # Run standalone demo
-pdm run python -m textual_cmdorc.app --config=config.toml
+pdm run python -m textual_cmdorc.simple_app
+
+# Or use the CLI
+pdm run cmdorc-tui --config=config.toml
 
 # Build for distribution
 pdm build
@@ -46,45 +46,39 @@ pdm build
 
 ## Code Architecture at a Glance
 
-The codebase is split into **three layers**, each serving a specific purpose:
+The codebase uses a **simplified flat list design** after removing the hierarchical tree complexity. The architecture has two main layers:
 
 ### Layer 1: Non-Textual Backend (`src/cmdorc_frontend/`)
 Reusable orchestration logic decoupled from any UI framework:
+- **orchestrator_adapter.py** - `OrchestratorAdapter`: Framework-agnostic wrapper for cmdorc's CommandOrchestrator
 - **config.py** - Parse TOML configs, build command hierarchy, validate keyboard shortcuts
-- **models.py** - Core dataclasses (CommandNode, TriggerSource, PresentationUpdate, etc.)
+- **models.py** - Core dataclasses (CommandNode, TriggerSource, KeyboardConfig, etc.)
+- **file_watcher.py** - `FileWatcherManager`: Watchdog integration for file-triggered commands
 - **state_manager.py** - StateReconciler (sync UI with cmdorc state on startup)
-- **watchers.py** - Abstract protocol for trigger sources (extensible for HTTP, Git hooks, etc.)
-- **notifier.py** - Protocol for pluggable notifications (logging abstraction)
+- **watchers.py** - Abstract protocol for trigger sources
+- **notifier.py** - Protocol for pluggable notifications
 
 **Key Principle:** This layer is 100% non-Textual. It can be used in headless scenarios or embedded in other UIs.
 
-### Layer 2: Textual-Specific Controller (`src/textual_cmdorc/controller.py`)
-The **primary embedding point** for host applications:
-- Owns `CommandOrchestrator` (from cmdorc), `FileWatcherManager`, and config state
-- Provides lifecycle methods: `attach(loop)`, `detach()`
-- Command control: `request_run(name)`, `request_cancel(name)` (sync-safe), and async versions
-- Exposes keyboard metadata: `keyboard_hints`, `keyboard_conflicts`
-- Emits callbacks: `on_command_started`, `on_command_finished`, `on_state_reconciled`, etc.
-- Handles file watcher events and triggers via cmdorc
+### Layer 2: Textual TUI (`src/textual_cmdorc/`)
+Simple flat list UI:
+- **simple_app.py** - `SimpleApp`: All-in-one TUI shell using FileLinkList + CommandLink widgets
+- **cli.py** - Command-line interface with auto-config generation
 
-**Public API (v0.1 Stable):** All methods documented in class docstring marked "RECOMMENDATION #2"
-
-### Layer 3: Textual Widgets (`src/textual_cmdorc/`)
-UI rendering and interactivity:
-- **view.py** - `CmdorcView`: Passive Textual widget, renders tree + log pane. No global key handling.
-- **widgets.py** - `CmdorcCommandLink`: Extends cmdorc's `CommandLink` with trigger chains, tooltips, keyboard hints, duplicate indicators.
-- **app.py** - `CmdorcApp`: Thin shell composing Controller + View for standalone mode only. Not suitable for embedding.
-- **file_watcher.py** - `WatchdogWatcher`: Concrete watchdog implementation (abstract in backend).
-- **integrator.py** - Wires controller callbacks to widgets, creates command trees.
-- **keyboard_handler.py** - Helper for keyboard configuration and conflict detection.
+**Key Difference from Old Design:** No separate Controller/View split. SimpleApp directly uses OrchestratorAdapter and handles all UI concerns. For advanced embedding, use OrchestratorAdapter directly.
 
 ## Key Design Decisions
 
-### Embeddable by Default
-The architecture enforces a clear separation:
-- **Controller** (non-Textual) can be used independently or with any UI framework
-- **View** (Textual widget) is passive—no global key bindings, pure rendering
-- **App** (Textual app) is a thin shell for standalone mode; use Controller + View directly to embed
+### Flat List Instead of Tree
+Commands appear in TOML order as a simple list (not hierarchical tree):
+- **Simpler mental model** - Command order matches TOML file
+- **Less code** - Reduced from ~2000 lines to ~500 lines
+- **Easier maintenance** - No tree reconciliation, cycle detection, or duplicate handling
+- **Still functional** - Trigger chains work via cmdorc, tooltips show relationships
+
+### SimpleApp for Standalone, OrchestratorAdapter for Embedding
+- **SimpleApp** - All-in-one TUI shell for standalone use (90% of use cases)
+- **OrchestratorAdapter** - Framework-agnostic backend for headless or custom UI scenarios
 
 ### cmdorc is the Source of Truth
 - All state (running commands, history, trigger chains) lives in `CommandOrchestrator` from cmdorc
@@ -96,59 +90,54 @@ The architecture enforces a clear separation:
 - These methods schedule async tasks on the stored event loop
 - Pure async methods (`run_command()`, `cancel_command()`) are available for async contexts
 
-### File Watchers are Lifecycle-Controlled by Host
-- `enable_watchers=False` for embedded mode (host controls when to start/stop)
-- `enable_watchers=True` for standalone mode (auto-starts on `attach()`)
-- Watcher callbacks use `call_soon_threadsafe()` for thread safety
-
 ## High-Level Data Flow
 
-### Startup (Embedded Mode)
+### Startup
 ```
-Host App compose()
-  → Create CmdorcController(config_path, enable_watchers=False)
-    → ConfigParser loads TOML (commands, keyboard shortcuts, watcher configs)
-    → CommandOrchestrator initialized with commands
-    → FileWatcherManager created (idle, not started yet)
-  → Create CmdorcView(controller)
-    → Integrator builds command tree, wires callbacks
+SimpleApp.__init__(config_path)
+  → compose()
+    → OrchestratorAdapter.__init__(config_path)
+      → load_config() → CommandOrchestrator
+      → load_frontend_config() → keyboard_config, watchers
+    → FileLinkList() (empty, populated in on_mount)
 
-Host App on_mount()
-  → controller.attach(asyncio.get_running_loop())
-    → FileWatcherManager starts observers
-  → Optional: Wire controller callbacks to host events
-  → Optional: Bind keyboard shortcuts from controller.keyboard_hints
+  → on_mount()
+    → adapter.attach(loop) → Start file watchers
+    → Populate FileLinkList with CommandLink widgets (TOML order)
+    → Wire lifecycle callbacks (success/failed/cancelled)
+    → Bind global keyboard shortcuts
 ```
 
 ### Command Execution Flow
 ```
-User Action (click, keyboard, file change, or trigger)
-  → CmdorcCommandLink or FileWatcherManager
-  → controller.request_run(name) or _on_file_change(trigger)
-  → CommandOrchestrator.run_command(name)
-    → Emits lifecycle callbacks
-    → Integrator receives callbacks
-    → Updates CmdorcCommandLink display
-    → View rerenders
+User clicks Play or presses [1]
+  → SimpleApp._start_command(name)
+  → adapter.request_run(name)
+  → orchestrator.run_command(name)
+  → Lifecycle callbacks fire:
+    → _on_command_started() → Update UI to ⏳
+    → _on_command_success/failed/cancelled() → Update UI to ✅/❌/⚠️
 ```
 
-### Trigger Chain Display
-When a command runs, tooltips show (in order):
-1. **Semantic Summary** - "Ran automatically (file change)" or "Ran manually"
-2. **Full Trigger Chain** - "py_file_changed → command_success:Lint → ..." (left-truncated if too long)
-3. **Keyboard Hint** - "[1] to stop" (if shortcut configured)
-4. **Duplicate Indicator** - "(Appears in multiple workflows)" (if command in tree multiple times)
+### Tooltip States
+When a command runs, tooltips show different information based on state:
 
-Logic is in `CmdorcCommandLink._update_tooltips()` and `TriggerSource` model methods.
+**Idle:** `Triggers: py_file_changed, manual\n[1] to run`
+
+**Running:** `Stop — Ran automatically (file change)\npy_file_changed\n[1] to stop`
+
+**Result:** `Last run: py_file_changed (✅ 2s ago)\nDuration: 1.5s\n[1] to run again`
+
+Logic is in `SimpleApp._build_idle_tooltip()`, `_build_running_tooltip()`, `_build_result_tooltip()` and `TriggerSource` model methods.
 
 ## Configuration Extensions
 
-textual-cmdorc extends cmdorc's TOML format with two optional sections:
+textual-cmdorc extends cmdorc's TOML format with optional keyboard shortcuts and file watchers:
 
 ### Keyboard Shortcuts (Optional)
 ```toml
 [keyboard]
-shortcuts = { Lint = "1", Format = "2", Tests = "3", Build = "b" }
+shortcuts = { Lint = "1", Format = "2", Tests = "3" }
 enabled = true                    # default true
 show_in_tooltips = true          # default true
 ```
@@ -158,7 +147,7 @@ show_in_tooltips = true          # default true
 ### File Watchers (Optional, Repeating)
 ```toml
 [[file_watcher]]
-dir = "./src"                    # required
+dir = "./src"
 patterns = ["**/*.py"]           # optional, takes precedence
 extensions = [".py"]             # optional, fallback
 ignore_dirs = ["__pycache__"]    # optional
@@ -166,27 +155,16 @@ trigger = "py_file_changed"      # required — cmdorc event name
 debounce_ms = 300                # optional, default 300ms
 ```
 
-Watchers are loaded by `ConfigParser.load_frontend_config()` and managed by `FileWatcherManager`.
+Watchers are loaded by `load_frontend_config()` and managed by `FileWatcherManager`.
 
 ## Testing Strategy
 
-Target: **≥90% coverage** (CI fails below 90%)
+Current: **59 tests, 29% coverage** (simplified codebase)
 
 ### Test Organization
-- **tests/conftest.py** - Fixtures (mock orchestrator, controller, app)
-- **tests/test_controller.py** - CmdorcController lifecycle and command control
-- **tests/test_models.py** - Config parsing, TriggerSource, PresentationUpdate
-- **tests/test_phase*.py** - Integration tests (phases correspond to implementation phases)
-- **tests/test_view.py** - CmdorcView rendering and widget updates
-
-### Coverage by Module
-| Module | Target | Notes |
-|--------|--------|-------|
-| config.py | 100% | Pure function, table-driven tests |
-| file_watcher.py | 98% | Mock observer + asyncio sleep tests |
-| integrator.py | 95% | Mock orchestrator, assert callbacks |
-| widgets.py | 92% | Textual test utilities + reactive tests |
-| app.py | 88%+ | Integration tests with mounted app |
+- **tests/conftest.py** - Fixtures (mock orchestrator, adapter, app)
+- **tests/test_cli.py** - CLI argument parsing and config generation
+- **tests/test_models.py** - Config parsing, TriggerSource, KeyboardConfig
 
 ### Running Tests
 ```bash
@@ -197,7 +175,7 @@ pdm run pytest --cov
 pdm run pytest -m integration
 
 # Run single test with output
-pdm run pytest tests/test_controller.py::test_attach_idempotent -v -s
+pdm run pytest tests/test_cli.py::test_parse_args_default -v -s
 
 # Generate HTML coverage report
 pdm run pytest --cov --cov-report=html
@@ -208,16 +186,14 @@ pdm run pytest --cov --cov-report=html
 
 | File | Purpose | Key Classes |
 |------|---------|-------------|
-| **src/cmdorc_frontend/config.py** | Parse TOML, build hierarchy | `ConfigParser`, `load_frontend_config()` |
-| **src/cmdorc_frontend/models.py** | Core dataclasses | `CommandNode`, `TriggerSource`, `PresentationUpdate`, `ConfigValidationResult` |
-| **src/textual_cmdorc/controller.py** | Primary embed point | `CmdorcController` |
-| **src/textual_cmdorc/view.py** | Textual widget | `CmdorcView` |
-| **src/textual_cmdorc/widgets.py** | Command link with tooltips | `CmdorcCommandLink` |
-| **src/textual_cmdorc/app.py** | Standalone app shell | `CmdorcApp`, `HelpScreen` |
-| **src/textual_cmdorc/file_watcher.py** | Watchdog integration | `WatchdogWatcher`, `_DebouncedHandler` |
-| **src/textual_cmdorc/integrator.py** | Wire callbacks | `create_command_link()` |
-| **architecture.md** | Full design reference | All design decisions, contracts, invariants |
-| **EMBEDDING.md** | How to embed in larger TUIs | Real-world examples, patterns, troubleshooting |
+| **src/textual_cmdorc/simple_app.py** | Standalone TUI shell | `SimpleApp`, `HelpScreen` |
+| **src/cmdorc_frontend/orchestrator_adapter.py** | Framework-agnostic backend | `OrchestratorAdapter` |
+| **src/cmdorc_frontend/config.py** | Parse TOML, build hierarchy | `load_frontend_config()` |
+| **src/cmdorc_frontend/models.py** | Core dataclasses | `CommandNode`, `TriggerSource`, `KeyboardConfig` |
+| **src/cmdorc_frontend/file_watcher.py** | Watchdog integration | `FileWatcherManager` |
+| **src/textual_cmdorc/cli.py** | Command-line interface | `main()`, `create_default_config()` |
+| **architecture.md** | Full design reference | Simplified design decisions |
+| **README.md** | User-facing quickstart | Features, API, examples |
 
 ## Common Patterns & Anti-Patterns
 
@@ -225,132 +201,137 @@ pdm run pytest --cov --cov-report=html
 
 ```python
 # Standalone mode
-from textual_cmdorc import CmdorcApp
-app = CmdorcApp(config_path="config.toml")
+from textual_cmdorc import SimpleApp
+app = SimpleApp(config_path="config.toml")
 app.run()
 
-# Embedding in host app
-from textual_cmdorc import CmdorcController, CmdorcView
+# Embedding SimpleApp in host app
+from textual.app import App, ComposeResult
+from textual_cmdorc import SimpleApp
 class MyApp(App):
     def compose(self):
-        self.cmdorc = CmdorcController("config.toml", enable_watchers=False)
-        yield CmdorcView(self.cmdorc)
+        self.cmdorc = SimpleApp.__new__(SimpleApp)
+        self.cmdorc.__init__(config_path="config.toml")
+        with Vertical():
+            yield self.cmdorc.file_list  # Just the list widget
 
     async def on_mount(self):
-        loop = asyncio.get_running_loop()
-        self.cmdorc.attach(loop)  # Attach after compose
+        await self.cmdorc.on_mount()
 
     async def on_unmount(self):
-        self.cmdorc.detach()  # Always cleanup
+        await self.cmdorc.on_unmount()
 
-# Headless command execution (no UI)
-controller = CmdorcController("config.toml", enable_watchers=False)
+# Headless command execution (no UI) using OrchestratorAdapter
+from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
+adapter = OrchestratorAdapter(config_path="config.toml")
 loop = asyncio.get_running_loop()
-controller.attach(loop)
-await controller.run_command("Deploy")
-controller.detach()
+adapter.attach(loop)
+
+# Wire callbacks
+adapter.on_command_success("Build", lambda h: print("Build passed!"))
+adapter.on_command_failed("Build", lambda h: print("Build failed!"))
+
+# Execute
+await adapter.run_command("Build")
+adapter.detach()
 
 # Sync-safe command execution from UI callbacks
 def on_button_clicked(self):
-    self.controller.request_run("CommandName")  # Safe from UI context
-
-# Check keyboard conflicts before binding
-conflicts = controller.keyboard_conflicts
-for key, cmd_name in controller.keyboard_hints.items():
-    if key not in conflicts:
-        app.bind(key, lambda n=cmd_name: controller.request_run(n))
+    self.adapter.request_run("CommandName")  # Safe from UI context
 ```
 
 ### ✗ Anti-Patterns to Avoid
 
 ```python
-# Wrong: Use enable_watchers=True in embedded mode
-controller = CmdorcController(config_path, enable_watchers=True)
-
 # Wrong: Attach outside of async context
 def compose(self):
-    self.controller.attach(loop)  # Loop not running yet!
+    self.adapter.attach(loop)  # Loop not running yet!
 
 # Wrong: Use async run_command() from sync callback
 def on_button_clicked(self):
-    asyncio.create_task(self.controller.run_command("Cmd"))  # Unsafe
+    asyncio.create_task(self.adapter.run_command("Cmd"))  # Unsafe
 
 # Wrong: Poll orchestrator state
 while True:
-    state = controller.orchestrator.get_state()
+    state = adapter.orchestrator.get_state()
     # ...
 
-# Wrong: Bind global keys inside controller
-class CmdorcController:
-    def attach(self, loop):
-        app.bind("1", self.run_command)  # Controller shouldn't know about app!
-
-# Wrong: Call app.exit() from controller
-def on_command_done(self):
-    app.exit()  # Controller must not depend on Textual
+# Wrong: Reference old CmdorcController or CmdorcView classes
+from textual_cmdorc import CmdorcController  # Doesn't exist anymore!
 ```
 
 ## Invariants & Guarantees
 
-1. **State Reconciliation** - Runs once on mount after tree is built. Syncs UI with cmdorc state (handles case where cmdorc has running commands but TUI just started). Idempotent and read-only.
+1. **cmdorc is Source of Truth** - TUI never infers command state. Only reflects transitions reported by cmdorc callbacks.
 
-2. **No Inferred State** - TUI never infers command state. Only reflects transitions reported by cmdorc callbacks.
+2. **No Polling** - All updates driven by explicit callbacks from orchestrator.
 
-3. **Cycle Breaking** - Cycles in command triggers are detected and broken arbitrarily. Commands in cycles may not appear in all branches.
+3. **TOML Order Preserved** - Commands displayed in config appearance order.
 
-4. **Callback Safety** - All outbound callbacks catch exceptions internally and log them. Exceptions do not propagate to caller.
+4. **Trigger Chains Immutable** - Once captured in `RunHandle.trigger_chain` from cmdorc, chains are read-only.
 
-5. **Thread-Safe Watchers** - File watcher callbacks use `call_soon_threadsafe()` to schedule async tasks from background threads.
+5. **Callback Safety** - All outbound callbacks catch exceptions internally and log them. Exceptions do not propagate to caller.
 
-6. **Idempotent Attach** - Calling `attach()` multiple times is safe. Validates loop is running and guards against double-start.
+6. **Thread-Safe Watchers** - File watcher callbacks use `call_soon_threadsafe()` to schedule async tasks from background threads.
 
-## Phase-Based Implementation Reference
-
-This project uses phase-based development (tracked in **implementation.md**):
-
-- **Phase 0** - Embeddable architecture (Controller + View split)
-- **Phase 1** - Config parsing & models (Keyboard + Watchers)
-- **Phase 2** - Trigger chain display (Semantic summaries, truncation)
-- **Phase 3** - Duplicate command indicators
-- **Phase 4** - Keyboard shortcuts & conflicts
-- **Phase 5** - Startup validation summary
-- **Phase 6** - Help screen (ModalScreen, shortcuts, conflicts)
-- **Phase 7** - Polish, testing, docs
-
-Each phase has corresponding tests in `tests/test_phaseN*.py`.
+7. **Idempotent Attach** - Calling `attach()` multiple times logs warning but is safe.
 
 ## External Dependencies
 
-- **cmdorc** (0.2.1+) - Core orchestration engine (source of truth for state)
-- **textual** (6.6.0+) - TUI framework (Widgets, App, ModalScreen, Tree, Log, etc.)
-- **watchdog** (4.0.0+) - File system event monitoring (pluggable for other backends)
+- **cmdorc** (0.3.0+) - Core orchestration engine (source of truth for state)
+- **textual** (6.6.0+) - TUI framework (App, widgets, styling)
+- **textual-filelink** (0.4.1+) - CommandLink widget with play/stop/settings buttons
+- **watchdog** (4.0.0+) - File system event monitoring
 
 ## Key Gotchas
 
-1. **Loop Must Be Running** - `controller.attach(loop)` will fail if loop is not running. Always call in `on_mount()`.
+1. **Loop Must Be Running** - `adapter.attach(loop)` will fail if loop is not running. Always call in `on_mount()`.
 
-2. **Trigger Chains Are Immutable** - Once captured in `RunHandle.trigger_chain` from cmdorc, chains are read-only. New chains only appear on next run.
+2. **Trigger Chains Are Immutable** - Once captured in `RunHandle.trigger_chain`, chains are read-only. New chains only appear on next run.
 
-3. **Duplicate Command Tracking** - Each view independently tracks duplicates. Multiple views with same controller each maintain own `_command_links` dict.
+3. **File Watcher Debouncing** - Events are debounced at 300ms (configurable). Rapid file changes coalesce into single trigger.
 
-4. **File Watcher Debouncing** - Events are debounced at 300ms (configurable). Rapid file changes coalesce into single trigger.
+4. **Config Reload Drops History** - `action_reload_config()` rebuilds entire list and loses command history (no persistence yet).
 
-5. **Keyboard Conflicts** - Keys with multiple commands are flagged in `keyboard_conflicts`. Host app should check before binding globally.
+5. **No Hierarchical Display** - Old tree-based design removed. Commands shown in flat list only. Hierarchy still built in backend for future use.
+
+## Architecture Evolution
+
+This project underwent a major simplification (v0.2.0):
+
+### Removed Features
+- ❌ Hierarchical tree display (now flat list)
+- ❌ CmdorcController + CmdorcView split (now SimpleApp + OrchestratorAdapter)
+- ❌ CmdorcCommandLink wrapper (use textual-filelink's CommandLink directly)
+- ❌ Duplicate command tracking (not needed in flat list)
+- ❌ Phase-based test files (simplified to test_cli.py, test_models.py)
+- ❌ Log pane (may add later)
+- ❌ State reconciliation on mount (no persistence yet)
+
+### Kept Features
+- ✅ OrchestratorAdapter (reusable backend)
+- ✅ Config parsing with keyboard + watchers
+- ✅ TriggerSource model (semantic summaries, chain formatting)
+- ✅ CommandNode hierarchy (built but not displayed, for future frontends)
+- ✅ File watching via watchdog
+- ✅ Keyboard shortcuts
+- ✅ Help screen
+
+See **architecture.md** for full design rationale.
 
 ## Documentation Files
 
-- **architecture.md** - Authoritative design reference (67 sections, full contract documentation)
-- **EMBEDDING.md** - Embedding guide with patterns, real-world scenarios, troubleshooting
-- **implementation.md** - Phase-by-phase implementation guide (referenced in architecture)
-- **plan.md** - Project roadmap and completed phases
-- **RELEASE_CHECKLIST.md** - Pre-release validation steps
-- **CHANGELOG.md** - Version history and breaking changes
+- **architecture.md** - Authoritative design reference (simplified v0.2.0)
 - **README.md** - User-facing quickstart and feature overview
+- **EMBEDDING.md** - Embedding guide (may be outdated, refer to SimpleApp docstring)
+- **implementation.md** - Phase-by-phase implementation guide (historical)
+- **plan.md** - Project roadmap (historical)
+- **CHANGELOG.md** - Version history and breaking changes
 
 ## When in Doubt
 
-1. **Architecture questions** → See `architecture.md` (section numbers in code comments reference it)
-2. **Embedding questions** → See `EMBEDDING.md` (patterns, real-world examples)
-3. **Implementation questions** → Check corresponding phase in `implementation.md`
-4. **API stability** → Check docstring in `CmdorcController` (marked "RECOMMENDATION #2")
+1. **Architecture questions** → See `architecture.md` (simplified design)
+2. **Standalone usage** → See `SimpleApp` in `simple_app.py`
+3. **Embedding/headless usage** → See `OrchestratorAdapter` in `orchestrator_adapter.py`
+4. **Config format** → See README.md or sample configs
 5. **Test coverage** → Run `pdm run pytest --cov` to see what's missing

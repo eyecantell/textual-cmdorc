@@ -5,7 +5,7 @@
 groups = ["default", "dev", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:eee20a83da33162c215e41f7e1f865eef3c4c2ffff7e2e4a1d97a5b4c61cbcd7"
+content_hash = "sha256:1a8ce4eef947599c5b7d46fbafc91dd22557b9aa500536cb6459f4845acc2ce7"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -224,7 +224,7 @@ files = [
 
 [[package]]
 name = "cmdorc"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.10"
 summary = "Async-first, trigger-driven shell command orchestrator for TUIs and agents"
 groups = ["default"]
@@ -232,8 +232,8 @@ dependencies = [
     "tomli>=2.3.0; python_version < \"3.11\"",
 ]
 files = [
-    {file = "cmdorc-0.2.1-py3-none-any.whl", hash = "sha256:6d8f284a537345739441ba1d1b844e06c23f514844c9703c8ae5865c6dbb2de8"},
-    {file = "cmdorc-0.2.1.tar.gz", hash = "sha256:ac5341ac39d4a4ef07e771e0303b62cb6dd824cba810381360e6766f945931ce"},
+    {file = "cmdorc-0.3.0-py3-none-any.whl", hash = "sha256:373de9d688911d2a907e655ce5a4182afc5519149fb80c37c608fcf6559a6825"},
+    {file = "cmdorc-0.3.0.tar.gz", hash = "sha256:f31296213457aa03557a18d2a05f0ea7fdad3260b2e33ab3e508134debc901a3"},
 ]
 
 [[package]]
@@ -1391,7 +1391,7 @@ files = [
 
 [[package]]
 name = "textual"
-version = "6.10.0"
+version = "6.11.0"
 requires_python = "<4.0,>=3.9"
 summary = "Modern Text User Interface framework"
 groups = ["default", "dev"]
@@ -1404,8 +1404,8 @@ dependencies = [
     "typing-extensions<5.0.0,>=4.4.0",
 ]
 files = [
-    {file = "textual-6.10.0-py3-none-any.whl", hash = "sha256:b33ffe37bc5f33e76cbe5a2018b4e9e5704f89bb3db0dbf04319261e0369bd3b"},
-    {file = "textual-6.10.0.tar.gz", hash = "sha256:87f52a21fe7527e472c1f1cf01faff95673c8378690b0e1b755ec93a0484dae9"},
+    {file = "textual-6.11.0-py3-none-any.whl", hash = "sha256:9e663b73ed37123a9b13c16a0c85e09ef917a4cfded97814361ed5cccfa40f89"},
+    {file = "textual-6.11.0.tar.gz", hash = "sha256:08237ebda0cfbbfd1a4e2fd3039882b35894a73994f6f0fcc12c5b0d78acf3cc"},
 ]
 
 [[package]]
@@ -1429,16 +1429,16 @@ files = [
 
 [[package]]
 name = "textual-filelink"
-version = "0.3.0"
+version = "0.4.1"
 requires_python = ">=3.9"
-summary = "Clickable file links for Textual applications."
+summary = "Clickable file links with icons, toggles, and command orchestration widget for Textual TUI applications."
 groups = ["default"]
 dependencies = [
-    "textual>=6.6.0",
+    "textual>=6.11.0",
 ]
 files = [
-    {file = "textual_filelink-0.3.0-py3-none-any.whl", hash = "sha256:b4095d1965eb4c5e4befcfaa4d3df638b3530870a366a3ec83ff5e9698810e84"},
-    {file = "textual_filelink-0.3.0.tar.gz", hash = "sha256:67a6e2fa68b8fea19750af096fd875f7532dc220958ecd217f23b21442f7ff0e"},
+    {file = "textual_filelink-0.4.1-py3-none-any.whl", hash = "sha256:1fd08b6b8a7da21911c9c24666c5d31f893fd442cf919ab296bca51c16950d48"},
+    {file = "textual_filelink-0.4.1.tar.gz", hash = "sha256:28d64eeb81661871894639aae561c1201b97b1b213d87954521d06300a1ded09"},
 ]
 
 [[package]]

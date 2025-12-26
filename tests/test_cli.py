@@ -125,14 +125,14 @@ class TestMain:
 
             with (
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
-                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+                patch("textual_cmdorc.cli.SimpleApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_app.return_value = mock_instance
 
                 main()
 
-                # Verify CmdorcApp was called with the config path
+                # Verify SimpleApp was called with the config path
                 mock_app.assert_called_once_with(config_path=str(config_path))
                 mock_instance.run.assert_called_once()
 
@@ -143,7 +143,7 @@ class TestMain:
 
             with (
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
-                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+                patch("textual_cmdorc.cli.SimpleApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_app.return_value = mock_instance
@@ -161,7 +161,7 @@ class TestMain:
 
     def test_main_keyboard_interrupt(self):
         """Test handling of KeyboardInterrupt (Ctrl+C)."""
-        with patch.object(sys, "argv", ["cmdorc-tui"]), patch("textual_cmdorc.cli.CmdorcApp") as mock_app:
+        with patch.object(sys, "argv", ["cmdorc-tui"]), patch("textual_cmdorc.cli.SimpleApp") as mock_app:
             mock_instance = MagicMock()
             mock_instance.run.side_effect = KeyboardInterrupt()
             mock_app.return_value = mock_instance
@@ -195,7 +195,7 @@ class TestMain:
 
             with (
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
-                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+                patch("textual_cmdorc.cli.SimpleApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_instance.run.side_effect = RuntimeError("App error")
@@ -215,7 +215,7 @@ class TestMain:
             # Use relative path
             with (
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", "config.toml"]),
-                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+                patch("textual_cmdorc.cli.SimpleApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_app.return_value = mock_instance
@@ -228,7 +228,7 @@ class TestMain:
                     os.chdir(tmpdir)
                     main()
 
-                    # Verify that the path passed to CmdorcApp is absolute
+                    # Verify that the path passed to SimpleApp is absolute
                     call_args = mock_app.call_args
                     passed_path = call_args[1]["config_path"]
                     assert Path(passed_path).is_absolute()
@@ -304,66 +304,3 @@ class TestDefaultConfigTemplate:
             # Verify watcher config
             assert watchers[0].trigger == "py_file_changed"
             assert "**/*.py" in (watchers[0].patterns or [])
-
-
-class TestActionCommand:
-    """Tests for CmdorcApp.action_command() method."""
-
-    def test_action_command_calls_controller_request_run(self):
-        """Test that action_command() calls controller.request_run()."""
-        from textual_cmdorc.app import CmdorcApp
-
-        app = CmdorcApp(config_path="config.toml")
-
-        # Mock controller
-        mock_controller = MagicMock()
-        app.controller = mock_controller
-
-        # Call action with command name
-        app.action_command("Lint")
-
-        # Verify controller.request_run was called with correct command name
-        mock_controller.request_run.assert_called_once_with("Lint")
-
-    def test_action_command_handles_no_controller(self):
-        """Test that action_command() gracefully handles missing controller."""
-        from textual_cmdorc.app import CmdorcApp
-
-        app = CmdorcApp(config_path="config.toml")
-        app.controller = None
-
-        # Should not raise exception, just log warning
-        app.action_command("Lint")
-
-    def test_action_command_with_multiple_command_names(self):
-        """Test action_command() with various command names."""
-        from textual_cmdorc.app import CmdorcApp
-
-        app = CmdorcApp(config_path="config.toml")
-        mock_controller = MagicMock()
-        app.controller = mock_controller
-
-        # Test multiple command names
-        command_names = ["Lint", "Format", "Tests", "Build"]
-        for cmd_name in command_names:
-            app.action_command(cmd_name)
-
-        # Verify each was called
-        assert mock_controller.request_run.call_count == len(command_names)
-        calls = [call[0][0] for call in mock_controller.request_run.call_args_list]
-        assert calls == command_names
-
-    def test_action_command_uses_sync_safe_request_run(self):
-        """Test that action_command() uses request_run (not async run_command)."""
-        from textual_cmdorc.app import CmdorcApp
-
-        app = CmdorcApp(config_path="config.toml")
-        mock_controller = MagicMock()
-        app.controller = mock_controller
-
-        # Call action
-        app.action_command("Lint")
-
-        # Verify request_run was called (not run_command)
-        mock_controller.request_run.assert_called_once_with("Lint")
-        mock_controller.run_command.assert_not_called()

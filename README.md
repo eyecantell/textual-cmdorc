@@ -1,191 +1,307 @@
-# textual-cmdorc: "Coming Soon" TUI Frontend for cmdorc Command Orchestration
+# textual-cmdorc: TUI Frontend for cmdorc Command Orchestration
 
 [![CI](https://github.com/eyecantell/textual-cmdorc/actions/workflows/ci.yml/badge.svg)](https://github.com/eyecantell/textual-cmdorc/actions)
 [![PyPI](https://img.shields.io/pypi/v/textual-cmdorc.svg)](https://pypi.org/project/textual-cmdorc/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/textual-cmdorc.svg)](https://pypi.org/project/textual-cmdorc/)
 [![License](https://img.shields.io/pypi/l/textual-cmdorc.svg)](https://github.com/eyecantell/textual-cmdorc/blob/main/LICENSE)
 
-A Textual-based TUI wrapper for [cmdorc](https://github.com/eyecantell/cmdorc), displaying hierarchical command workflows with real-time status updates, manual controls, and trigger inputs.
+A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmdorc), displaying commands in a flat list with real-time status updates, manual controls, and file watching.
 
-**Key Design:** Embeddable by default. Use as a **standalone TUI app** or **embed in larger applications**. The architecture splits into non-Textual controller (orchestration) and passive Textual view (rendering), enabling reuse across frontends.
+**Key Design:** Direct and simple. A single `SimpleApp` class wraps cmdorc's `CommandOrchestrator` with a flat list UI powered by [textual-filelink](https://github.com/eyecantell/textual-filelink).
 
-**Current Status:** ✅ All Phase 0-3 features complete and tested (137 tests, 47% coverage). Ready for production use.
+**Current Status:** ✅ Production ready (59 tests, 29% coverage). ~500 lines of code.
 
-**Ideal for:** Developer tools, automation monitoring, interactive workflows, or as a subcomponent in larger TUIs.
-
-The project is structured with a shared backend (`cmdorc_frontend`) for config parsing, models, state management, and abstract watchers—enabling easy extension to other frontends (e.g., VSCode)—and TUI-specific code in `textual_cmdorc`.
+**Ideal for:** Developer tools, automation monitoring, CI/CD interfaces, or as a subcomponent in larger TUIs.
 
 ## Features
 
 ### Core Functionality
-- 📂 Load cmdorc TOML configs (e.g., config.toml) for dynamic command lists.
-- 🌳 **Hierarchical display**: Indents chained commands based on lifecycle triggers (success/failed/cancelled) using Textual Tree for interactivity and collapsibility.
-- 🔄 **Real-time status**: Spinners, icons (e.g., ✅/❌), and enhanced tooltips with full trigger chain breadcrumbs.
-- 🖱️ **Interactive**: Play/stop buttons for manual runs/cancels; app-level shortcuts (e.g., r to reload, q to quit).
-- 📜 **Log pane**: Event/output snippets with toggle visibility.
-- 🔧 **File watching**: Trigger events on file changes via watchdog (configurable in TOML).
+- 📂 **TOML Configuration**: Load cmdorc configs (e.g., config.toml) for dynamic command lists
+- 📋 **Flat List Display**: Commands shown in TOML order using textual-filelink's CommandLink widgets
+- 🔄 **Real-time Status**: Icons (◯/⏳/✅/❌) and dynamic tooltips showing command state
+- 🖱️ **Interactive Controls**: Play/stop buttons for manual command execution
+- 🔧 **File Watching**: Auto-trigger commands on file changes via watchdog (configurable in TOML)
+- ⚡ **Trigger Chains**: Commands automatically trigger other commands based on success/failure
 
 ### UX Enhancements
-- 💡 **Semantic Trigger Summaries**: Tooltips show human-readable summaries ("Ran automatically (file change)") before technical details, making it clear *why* commands ran.
-- ⌨️ **Global Keyboard Shortcuts**: Configurable hotkeys (1-9 by default) to play/stop commands from anywhere. Defined in `[keyboard]` section of TOML. `[h]` shows help with all shortcuts and conflicts.
-- ✅ **Startup Validation Summary**: Config issues (missing dirs, duplicate keys, unknown commands) displayed on app start in log pane—no hunting through logs.
-- 🎯 **Duplicate Command Indicators**: Visual cues (↳ suffix) when commands appear in multiple workflows, with tooltip clarification.
-- 🎨 **Smart Tooltips**: Show semantic summaries, full trigger chains, keyboard hints, and duplicate indicators all in one place.
+- 💡 **Smart Tooltips**: Show trigger sources, keyboard hints, and last run details
+- ⌨️ **Global Keyboard Shortcuts**: Configurable hotkeys (1-9, a-z, f1-f12) to run/stop commands
+- 🎯 **Help Screen**: Press `[h]` to see all keyboard shortcuts
+- 🔄 **Live Reload**: Press `[r]` to reload configuration without restarting
 
 ### Embedding & Extensibility
-- 🔗 **Embeddable Architecture**: Non-Textual controller + passive widget = reusable in larger TUIs or headless scenarios.
-- 🔄 **State reconciliation**: Syncs UI with cmdorc state on startup/reload.
-- 🎛️ **Pluggable notifications**: Custom logging/notification handlers via `CmdorcNotifier` protocol.
-
-## Embedding textual-cmdorc in Larger Applications
-
-textual-cmdorc can be used as a widget in any larger Textual app. Here's how:
-
-```python
-from textual.app import App, ComposeResult
-from textual.containers import Horizontal
-from textual_cmdorc import CmdorcController, CmdorcView
-
-class MyLargerApp(App):
-    """Example: Embed cmdorc command orchestration in a larger TUI."""
-
-    def compose(self) -> ComposeResult:
-        # Host app creates and owns the controller
-        self.cmdorc = CmdorcController(
-            "config.toml",
-            enable_watchers=False  # Host controls watcher lifecycle
-        )
-
-        # Wire controller events to host app
-        self.cmdorc.on_command_finished = self.on_cmdorc_done
-
-        # CmdorcView is a passive widget—just include it in layout
-        yield Horizontal(
-            CmdorcView(self.cmdorc, show_log_pane=False),  # Embedded view
-            MyOtherPanel(),
-        )
-
-    async def on_mount(self):
-        # Host controls when to start watchers
-        import asyncio
-        loop = asyncio.get_running_loop()
-        self.cmdorc.attach(loop)
-
-    async def on_unmount(self):
-        self.cmdorc.detach()
-
-    def on_cmdorc_done(self, name: str, result):
-        self.notify(f"Command finished: {name}")
-```
-
-See [architecture.md](architecture.md#65-embedding-architecture--contracts) for detailed embedding contracts and design details.
-
-## Installation
-```bash
-pip install textual-cmdorc
-```
-Or with PDM:
-```bash
-pdm add textual-cmdorc
-```
-
-**Requirements:**
-- Python 3.10+
-- `watchdog` package (required for file watching features)
-
-## Migration Guide (v0.1)
-
-If you're upgrading to v0.1, the architecture has been redesigned to support embedding. Here's what changed:
-
-### For Standalone Users (No Changes Required)
-If you're only using `CmdorcApp` as a standalone TUI:
-```python
-from textual_cmdorc import CmdorcApp
-app = CmdorcApp(config_path="config.toml")
-app.run()
-```
-Everything works the same way. No changes needed!
-
-### For Host Applications (New Embedding Support)
-If you want to embed textual-cmdorc in a larger TUI:
-```python
-from textual_cmdorc import CmdorcController, CmdorcView
-from textual.app import App
-
-class MyLargerApp(App):
-    def compose(self):
-        # Create and own the controller
-        self.cmdorc = CmdorcController("config.toml", enable_watchers=False)
-        yield CmdorcView(self.cmdorc, show_log_pane=False)
-
-    def on_mount(self):
-        # Host controls when to attach to event loop
-        import asyncio
-        self.cmdorc.attach(asyncio.get_running_loop())
-```
-
-### What's New in v0.1
-- **Embeddable Architecture**: Use as a widget in larger TUIs
-- **Semantic Trigger Summaries**: Tooltips show "Ran automatically (file change)" before technical details
-- **Startup Validation**: Config issues shown immediately on app start
-- **Duplicate Indicators**: Visual (↳) suffix when commands appear multiple times
-- **Help Screen**: Press `h` to see keyboard shortcuts and conflicts
-- **Stable Public API**: Controller API frozen for v0.1, safe for embedding
-
-See [architecture.md](architecture.md#65-embedding-architecture--contracts) for detailed embedding contracts.
+- 🔗 **Embeddable**: Use OrchestratorAdapter directly for headless or custom UI scenarios
+- 🎛️ **Framework Agnostic Backend**: OrchestratorAdapter has no Textual dependencies
+- 📦 **Simple Integration**: Import SimpleApp and run with a config path
 
 ## Quick Start
 
-1. Run the TUI (auto-creates config.toml on first run):
-   ```bash
-   cmdorc-tui
-   ```
+### Standalone App
+```bash
+# Install
+pip install textual-cmdorc
 
-   Or with a custom config:
-   ```bash
-   cmdorc-tui --config my-workflow.toml
-   ```
+# Auto-generate config.toml and launch
+cmdorc-tui
 
-   **Note:** The default config assumes `ruff` and `pytest` are available on PATH. Install them with:
-   ```bash
-   pip install ruff pytest
-   ```
-
-2. On first run, a default config.toml will be created with:
-   - File watcher for `**/*.py` files
-   - Lint → Format → Tests command chain
-   - Keyboard shortcuts: 1=Lint, 2=Format, 3=Tests
-
-3. Edit config.toml to customize commands, triggers, and shortcuts.
-
-4. Use keyboard shortcuts (press `1` to run/stop Lint) or click play/stop buttons.
-
-Example workflow: Save a .py file → triggers "py_file_changed" → Lint → Format → Tests chain.
+# Or use custom config
+cmdorc-tui --config my-config.toml
+```
 
 ### Programmatic Usage
-
-You can also use textual-cmdorc as a library:
 ```python
-from textual_cmdorc import CmdorcApp
-app = CmdorcApp(config_path="config.toml")
+from textual_cmdorc import SimpleApp
+
+app = SimpleApp(config_path="config.toml")
 app.run()
 ```
 
-Or embed in a larger application (see [Embedding textual-cmdorc in Larger Applications](#embedding-textual-cmdorc-in-larger-applications)).
+### Embedding in Larger Applications
+
+For most embedding scenarios, use **OrchestratorAdapter** directly to build custom UIs:
+
+```python
+from textual.app import App, ComposeResult
+from textual.widgets import Header, Footer, Static
+from textual_filelink import CommandLink, FileLinkList
+from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
+import asyncio
+
+class MyApp(App):
+    """Custom TUI using OrchestratorAdapter."""
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+
+        # Create adapter (loads config, creates orchestrator)
+        self.adapter = OrchestratorAdapter(config_path="config.toml")
+
+        # Build your own UI with CommandLink widgets
+        self.file_list = FileLinkList(show_toggles=False, show_remove=False)
+        yield self.file_list
+
+        yield Footer()
+
+    async def on_mount(self):
+        # Attach adapter to event loop
+        loop = asyncio.get_running_loop()
+        self.adapter.attach(loop)
+
+        # Populate list with commands
+        for cmd_name in self.adapter.get_command_names():
+            link = CommandLink(
+                name=cmd_name,
+                output_path=None,
+                initial_status_icon="◯",
+                initial_status_tooltip=f"Run {cmd_name}"
+            )
+            self.file_list.add_item(link)
+
+        # Wire callbacks (update UI on command events)
+        for cmd_name in self.adapter.get_command_names():
+            self.adapter.on_command_success(
+                cmd_name,
+                lambda h, name=cmd_name: self._on_success(name, h)
+            )
+
+    async def on_unmount(self):
+        self.adapter.detach()
+
+    def _on_success(self, name, handle):
+        # Update UI when command succeeds
+        # (implement your own UI update logic here)
+        pass
+```
+
+For headless/programmatic use (no UI), see the **OrchestratorAdapter** API below.
+
+## Configuration
+
+textual-cmdorc extends cmdorc's TOML format with optional keyboard shortcuts and file watchers:
+
+```toml
+# Standard cmdorc config
+[[command]]
+name = "Lint"
+command = "ruff check --fix ."
+triggers = ["py_file_changed"]
+
+[[command]]
+name = "Format"
+command = "ruff format ."
+triggers = ["command_success:Lint"]
+
+[[command]]
+name = "Tests"
+command = "pytest ."
+triggers = ["command_success:Format"]
+
+# Optional: Keyboard shortcuts
+[keyboard]
+shortcuts = { Lint = "1", Format = "2", Tests = "3" }
+enabled = true
+show_in_tooltips = true
+
+# Optional: File watchers
+[[file_watcher]]
+dir = "./src"
+patterns = ["**/*.py"]
+trigger = "py_file_changed"
+debounce_ms = 300
+ignore_dirs = ["__pycache__", ".git"]
+```
+
+Run `cmdorc-tui` without a config file to auto-generate a starter config.
+
+## Architecture
+
+### SimpleApp (TUI Shell)
+A single Textual App class that:
+1. Loads config and creates `OrchestratorAdapter`
+2. Builds a `FileLinkList` with `CommandLink` widgets in TOML order
+3. Wires lifecycle callbacks to update UI on command state changes
+4. Handles keyboard shortcuts and global actions (help, reload, quit)
+
+### OrchestratorAdapter (Framework-Agnostic Backend)
+A non-Textual adapter that:
+- Wraps cmdorc's `CommandOrchestrator` with a simpler API
+- Manages file watchers and triggers
+- Provides `request_run()` / `request_cancel()` for thread-safe command control
+- Emits lifecycle callbacks: `on_command_success`, `on_command_failed`, `on_command_cancelled`
+- No Textual dependencies—reusable in headless scenarios or other UI frameworks
+
+## API Reference
+
+### SimpleApp
+```python
+from textual_cmdorc import SimpleApp
+
+app = SimpleApp(config_path="config.toml")
+app.run()
+```
+
+**Key Methods:**
+- `__init__(config_path: str)` - Initialize with TOML config path
+- `compose()` - Build UI (called by Textual)
+- `on_mount()` - Populate commands and wire callbacks (called by Textual)
+- `action_toggle_command(cmd_name: str)` - Run/stop command (keyboard shortcuts)
+- `action_reload_config()` - Reload config from disk
+- `action_show_help()` - Show help screen with keyboard shortcuts
+
+### OrchestratorAdapter
+
+Use `OrchestratorAdapter` for headless scenarios or custom UI frameworks:
+
+```python
+import asyncio
+from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
+
+async def main():
+    # Create adapter (loads config, creates orchestrator)
+    adapter = OrchestratorAdapter(config_path="config.toml")
+
+    # Attach to event loop (starts file watchers)
+    loop = asyncio.get_running_loop()
+    adapter.attach(loop)
+
+    # Register callbacks
+    adapter.on_command_success("Tests", lambda h: print(f"✅ Tests passed in {h.duration_str}"))
+    adapter.on_command_failed("Tests", lambda h: print(f"❌ Tests failed: {h.return_code}"))
+
+    # Execute commands
+    await adapter.run_command("Lint")  # Async execution
+    adapter.request_run("Tests")  # Thread-safe (returns immediately)
+
+    # Wait for commands to complete...
+    await asyncio.sleep(5)
+
+    # Cleanup
+    adapter.detach()
+
+asyncio.run(main())
+```
+
+**Key Methods:**
+- `attach(loop: asyncio.AbstractEventLoop)` - Attach to event loop and start watchers
+- `detach()` - Stop watchers and cleanup
+- `request_run(name: str)` - Thread-safe command execution request
+- `request_cancel(name: str)` - Thread-safe command cancellation request
+- `run_command(name: str)` - Async command execution
+- `cancel_command(name: str)` - Async command cancellation
+- `get_command_names()` - Get all command names in TOML order
+- `on_command_success(name: str, callback: Callable)` - Register success callback
+- `on_command_failed(name: str, callback: Callable)` - Register failure callback
+- `on_command_cancelled(name: str, callback: Callable)` - Register cancellation callback
 
 ## Development
-- Setup: `pdm install -G test`
-- Tests: `pdm run pytest --cov` (90%+ coverage)
-- Lint: `pdm run ruff check .`
-- Docs: See implementation.md for detailed plan and architecture.md for design.
 
-## Contributing
-Fork, branch (e.g., feature/new-tooltip), PR. Maintain 90% coverage.
+```bash
+# Setup
+git clone https://github.com/eyecantell/textual-cmdorc.git
+cd textual-cmdorc
+pdm install -G test -G lint -G dev
+
+# Run tests
+pdm run pytest --cov
+
+# Lint
+pdm run ruff check .
+
+# Format
+pdm run ruff format .
+
+# Run app
+pdm run python -m textual_cmdorc.simple_app
+```
+
+## Architecture Decisions
+
+### Why Flat List Instead of Tree?
+The original design used a hierarchical tree to visualize trigger relationships. After extensive development (137 tests, ~2000 lines), we simplified to a flat list because:
+1. **Simpler mental model**: Command order matches TOML file order
+2. **Less code**: Reduced from ~2000 lines to ~500 lines
+3. **Easier to maintain**: No tree reconciliation, cycle detection, or duplicate handling
+4. **Still functional**: Trigger chains work via cmdorc, tooltips show relationships
+
+### Why SimpleApp Instead of Controller+View Split?
+The original embeddable architecture split concerns into `CmdorcController` (non-Textual) and `CmdorcView` (Textual widget). The new design simplifies to:
+- **SimpleApp**: All-in-one TUI shell for standalone use
+- **OrchestratorAdapter**: Framework-agnostic backend for advanced embedding
+
+This is simpler for 90% of use cases while still supporting headless/custom UI scenarios via OrchestratorAdapter.
+
+## Project Status
+
+### Completed
+- ✅ Flat list display with CommandLink widgets
+- ✅ Real-time status updates (icons, tooltips)
+- ✅ Keyboard shortcuts (configurable, conflict detection)
+- ✅ File watchers (watchdog integration)
+- ✅ Help screen (modal with shortcuts)
+- ✅ Config reload (live without restart)
+- ✅ CLI with auto-config generation
+- ✅ 59 passing tests (29% coverage)
+
+### Known Limitations
+- No log pane (use terminal output instead)
+- No hierarchical tree display
+- Commands shown in TOML order only (no custom sorting)
 
 ## License
-MIT - See [LICENSE](LICENSE).
 
-## Links
-- Repository: https://github.com/eyecantell/textual-cmdorc
-- Issues: https://github.com/eyecantell/textual-cmdorc/issues
-- Related: [cmdorc](https://github.com/eyecantell/cmdorc), [textual-filelink](https://github.com/eyecantell/textual-filelink)
+MIT License. See [LICENSE](LICENSE) for details.
+
+## Contributing
+
+Contributions welcome! Please:
+1. Open an issue first for major changes
+2. Follow existing code style (ruff format)
+3. Add tests for new features
+4. Update documentation
+
+## Credits
+
+- Built with [Textual](https://textual.textualize.io/)
+- Uses [cmdorc](https://github.com/eyecantell/cmdorc) for command orchestration
+- Uses [textual-filelink](https://github.com/eyecantell/textual-filelink) for command widgets
+- File watching via [watchdog](https://github.com/gorakhargosh/watchdog)
