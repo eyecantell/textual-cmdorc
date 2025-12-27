@@ -329,3 +329,148 @@ class TestCmdorcAppGetLink:
             result = app._get_link("Test")
 
             assert result is None
+
+
+class TestCmdorcAppInitialStatus:
+    """Test initial status icon reflects historical run state."""
+
+    @pytest.mark.asyncio
+    async def test_on_mount_sets_success_icon_from_history(self, mock_adapter, mock_config_path):
+        """Test that on_mount sets success icon when last run succeeded."""
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            # Mock status with successful last run
+            mock_status = Mock()
+            mock_last_run = Mock()
+            mock_last_run.state.name = "SUCCESS"
+            mock_last_run.output_file = None
+            mock_status.last_run = mock_last_run
+            mock_adapter.orchestrator.get_status.return_value = mock_status
+
+            app = CmdorcApp(config_path=mock_config_path)
+
+            # Ensure adapter is set
+            app.adapter = mock_adapter
+
+            # Mock file_list
+            app.file_list = Mock()
+            app.file_list.add_item = Mock()
+
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_idle = Mock(return_value="Idle")
+            app.tooltip_builder.build_play_tooltip = Mock(return_value="Play")
+            app.tooltip_builder.build_stop_tooltip = Mock(return_value="Stop")
+            app.tooltip_builder.build_output_tooltip = Mock(return_value="Output")
+
+            # Call on_mount
+            await app.on_mount()
+
+            # Verify CommandLink was created with success icon
+            app.file_list.add_item.assert_called()
+            link_arg = app.file_list.add_item.call_args[0][0]
+            assert link_arg._status_icon == "✅"
+
+    @pytest.mark.asyncio
+    async def test_on_mount_sets_failed_icon_from_history(self, mock_adapter, mock_config_path):
+        """Test that on_mount sets failed icon when last run failed."""
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            # Mock status with failed last run
+            mock_status = Mock()
+            mock_last_run = Mock()
+            mock_last_run.state.name = "FAILED"
+            mock_last_run.output_file = None
+            mock_status.last_run = mock_last_run
+            mock_adapter.orchestrator.get_status.return_value = mock_status
+
+            app = CmdorcApp(config_path=mock_config_path)
+
+            # Ensure adapter is set
+            app.adapter = mock_adapter
+
+            # Mock file_list
+            app.file_list = Mock()
+            app.file_list.add_item = Mock()
+
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_idle = Mock(return_value="Idle")
+            app.tooltip_builder.build_play_tooltip = Mock(return_value="Play")
+            app.tooltip_builder.build_stop_tooltip = Mock(return_value="Stop")
+            app.tooltip_builder.build_output_tooltip = Mock(return_value="Output")
+
+            # Call on_mount
+            await app.on_mount()
+
+            # Verify CommandLink was created with failed icon
+            app.file_list.add_item.assert_called()
+            link_arg = app.file_list.add_item.call_args[0][0]
+            assert link_arg._status_icon == "❌"
+
+    @pytest.mark.asyncio
+    async def test_on_mount_sets_cancelled_icon_from_history(self, mock_adapter, mock_config_path):
+        """Test that on_mount sets cancelled icon when last run was cancelled."""
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            # Mock status with cancelled last run
+            mock_status = Mock()
+            mock_last_run = Mock()
+            mock_last_run.state.name = "CANCELLED"
+            mock_last_run.output_file = None
+            mock_status.last_run = mock_last_run
+            mock_adapter.orchestrator.get_status.return_value = mock_status
+
+            app = CmdorcApp(config_path=mock_config_path)
+
+            # Ensure adapter is set
+            app.adapter = mock_adapter
+
+            # Mock file_list
+            app.file_list = Mock()
+            app.file_list.add_item = Mock()
+
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_idle = Mock(return_value="Idle")
+            app.tooltip_builder.build_play_tooltip = Mock(return_value="Play")
+            app.tooltip_builder.build_stop_tooltip = Mock(return_value="Stop")
+            app.tooltip_builder.build_output_tooltip = Mock(return_value="Output")
+
+            # Call on_mount
+            await app.on_mount()
+
+            # Verify CommandLink was created with cancelled icon
+            app.file_list.add_item.assert_called()
+            link_arg = app.file_list.add_item.call_args[0][0]
+            assert link_arg._status_icon == "⚠️"
+
+    @pytest.mark.asyncio
+    async def test_on_mount_sets_idle_icon_when_no_history(self, mock_adapter, mock_config_path):
+        """Test that on_mount sets idle icon when no history exists."""
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            # Mock status with no last run
+            mock_status = Mock()
+            mock_status.last_run = None
+            mock_adapter.orchestrator.get_status.return_value = mock_status
+
+            app = CmdorcApp(config_path=mock_config_path)
+
+            # Ensure adapter is set
+            app.adapter = mock_adapter
+
+            # Mock file_list
+            app.file_list = Mock()
+            app.file_list.add_item = Mock()
+
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_idle = Mock(return_value="Idle")
+            app.tooltip_builder.build_play_tooltip = Mock(return_value="Play")
+            app.tooltip_builder.build_stop_tooltip = Mock(return_value="Stop")
+            app.tooltip_builder.build_output_tooltip = Mock(return_value="Output")
+
+            # Call on_mount
+            await app.on_mount()
+
+            # Verify CommandLink was created with idle icon
+            app.file_list.add_item.assert_called()
+            link_arg = app.file_list.add_item.call_args[0][0]
+            assert link_arg._status_icon == "◯"

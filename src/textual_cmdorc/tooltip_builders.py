@@ -366,7 +366,7 @@ class TooltipBuilder:
             output_file = status.last_run.output_file
 
             # Get preview using formatting utility
-            preview_data = get_output_preview(output_file, max_lines=5, max_line_length=60)
+            preview_data = get_output_preview(output_file, max_lines=1, max_line_length=60)
 
             if not preview_data:
                 lines.append("No output available yet")
@@ -374,19 +374,16 @@ class TooltipBuilder:
 
             preview_lines, total_lines = preview_data
 
-            # Show file path
-            lines.append(f"Open: {output_file}")
-            lines.append("")
-
+            # Textual tooltips will not render properly if they are too many lines (they will flash and disappear), so these have been commented out for now.
             # Show preview (last 5 lines)
-            if preview_lines:
-                lines.append("Last 5 lines:")
-                lines.append("─" * 40)
-                lines.extend(preview_lines)
-                lines.append("─" * 40)
-            else:
-                lines.append("(empty output)")
-                lines.append("─" * 40)
+            # if preview_lines:
+            #    lines.append("Last 5 lines:")
+            #    lines.append("─" * 40)
+            #    lines.extend(preview_lines)
+            #    lines.append("─" * 40)
+            # else:
+            #    lines.append("(empty output)")
+            #    lines.append("─" * 40)
 
             lines.append("")
 

@@ -188,10 +188,21 @@ class CmdorcApp(App):
                         if status and status.last_run and status.last_run.output_file:
                             initial_output_path = status.last_run.output_file
 
+                        # Determine initial status icon based on history
+                        initial_status_icon = "◯"  # Default to idle
+                        if status and status.last_run:
+                            state_name = status.last_run.state.name
+                            icon_map = {
+                                "SUCCESS": "✅",
+                                "FAILED": "❌",
+                                "CANCELLED": "⚠️",
+                            }
+                            initial_status_icon = icon_map.get(state_name, "◯")
+
                         link = CommandLink(
                             command_name=cmd_name,
                             output_path=initial_output_path,
-                            initial_status_icon="◯",
+                            initial_status_icon=initial_status_icon,
                             initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
                             show_settings=True,
                             tooltip=self.tooltip_builder.build_output_tooltip(cmd_name),
@@ -523,10 +534,21 @@ class CmdorcApp(App):
                     if status and status.last_run and status.last_run.output_file:
                         initial_output_path = status.last_run.output_file
 
+                    # Determine initial status icon based on history
+                    initial_status_icon = "◯"  # Default to idle
+                    if status and status.last_run:
+                        state_name = status.last_run.state.name
+                        icon_map = {
+                            "SUCCESS": "✅",
+                            "FAILED": "❌",
+                            "CANCELLED": "⚠️",
+                        }
+                        initial_status_icon = icon_map.get(state_name, "◯")
+
                     link = CommandLink(
                         command_name=cmd_name,
                         output_path=initial_output_path,
-                        initial_status_icon="◯",
+                        initial_status_icon=initial_status_icon,
                         initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
                         show_settings=True,
                         tooltip=self.tooltip_builder.build_output_tooltip(cmd_name),
