@@ -125,14 +125,14 @@ class TestMain:
 
             with (
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
-                patch("textual_cmdorc.cli.SimpleApp") as mock_app,
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_app.return_value = mock_instance
 
                 main()
 
-                # Verify SimpleApp was called with the config path
+                # Verify CmdorcApp was called with the config path
                 mock_app.assert_called_once_with(config_path=str(config_path))
                 mock_instance.run.assert_called_once()
 
@@ -143,7 +143,7 @@ class TestMain:
 
             with (
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
-                patch("textual_cmdorc.cli.SimpleApp") as mock_app,
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_app.return_value = mock_instance
@@ -161,7 +161,7 @@ class TestMain:
 
     def test_main_keyboard_interrupt(self):
         """Test handling of KeyboardInterrupt (Ctrl+C)."""
-        with patch.object(sys, "argv", ["cmdorc-tui"]), patch("textual_cmdorc.cli.SimpleApp") as mock_app:
+        with patch.object(sys, "argv", ["cmdorc-tui"]), patch("textual_cmdorc.cli.CmdorcApp") as mock_app:
             mock_instance = MagicMock()
             mock_instance.run.side_effect = KeyboardInterrupt()
             mock_app.return_value = mock_instance
@@ -195,7 +195,7 @@ class TestMain:
 
             with (
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
-                patch("textual_cmdorc.cli.SimpleApp") as mock_app,
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_instance.run.side_effect = RuntimeError("App error")
@@ -215,7 +215,7 @@ class TestMain:
             # Use relative path
             with (
                 patch.object(sys, "argv", ["cmdorc-tui", "-c", "config.toml"]),
-                patch("textual_cmdorc.cli.SimpleApp") as mock_app,
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
             ):
                 mock_instance = MagicMock()
                 mock_app.return_value = mock_instance
@@ -228,7 +228,7 @@ class TestMain:
                     os.chdir(tmpdir)
                     main()
 
-                    # Verify that the path passed to SimpleApp is absolute
+                    # Verify that the path passed to CmdorcApp is absolute
                     call_args = mock_app.call_args
                     passed_path = call_args[1]["config_path"]
                     assert Path(passed_path).is_absolute()

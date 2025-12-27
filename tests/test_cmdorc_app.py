@@ -1,4 +1,4 @@
-"""Tests for SimpleApp TUI application."""
+"""Tests for CmdorcApp TUI application."""
 
 import sys
 from pathlib import Path
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 from cmdorc import RunHandle
 
-from textual_cmdorc.simple_app import SimpleApp
+from textual_cmdorc.cmdorc_app import CmdorcApp
 
 # Mock textual_filelink before imports
 mock_filelink = MagicMock()
@@ -87,14 +87,14 @@ triggers = []
     return config_path
 
 
-class TestSimpleAppLifecycleCallbacks:
+class TestCmdorcAppLifecycleCallbacks:
     """Test lifecycle callback methods."""
 
     @pytest.mark.asyncio
     async def test_on_command_success_with_output_file(self, mock_adapter, mock_config_path):
         """Test _on_command_success sets output_path when output_file exists."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Create a mock link
             mock_link = Mock()
@@ -105,9 +105,11 @@ class TestSimpleAppLifecycleCallbacks:
             # Mock _get_link to return our mock link
             app._get_link = Mock(return_value=mock_link)
 
-            # Mock other dependencies
-            app._build_result_tooltip = Mock(return_value="Test result")
-            app._get_command_string = Mock(return_value="echo test")
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_completed = Mock(return_value="Test result")
+            app.tooltip_builder.build_play_tooltip = Mock(return_value="Play test")
+            app.tooltip_builder.build_output_tooltip = Mock(return_value="Output test")
 
             # Create a handle with output_file
             output_file = Path("/tmp/test_output.txt")
@@ -123,8 +125,8 @@ class TestSimpleAppLifecycleCallbacks:
     @pytest.mark.asyncio
     async def test_on_command_success_without_output_file(self, mock_adapter, mock_config_path):
         """Test _on_command_success when output_file is None."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Create a mock link
             mock_link = Mock()
@@ -134,9 +136,11 @@ class TestSimpleAppLifecycleCallbacks:
             # Mock _get_link to return our mock link
             app._get_link = Mock(return_value=mock_link)
 
-            # Mock other dependencies
-            app._build_result_tooltip = Mock(return_value="Test result")
-            app._get_command_string = Mock(return_value="echo test")
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_completed = Mock(return_value="Test result")
+            app.tooltip_builder.build_play_tooltip = Mock(return_value="Play test")
+            app.tooltip_builder.build_output_tooltip = Mock(return_value="Output test")
 
             # Create a handle without output_file
             handle = RunHandle(name="Test", output_file=None)
@@ -151,8 +155,8 @@ class TestSimpleAppLifecycleCallbacks:
     @pytest.mark.asyncio
     async def test_on_command_failed_with_output_file(self, mock_adapter, mock_config_path):
         """Test _on_command_failed sets output_path when output_file exists."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Create a mock link
             mock_link = Mock()
@@ -160,8 +164,12 @@ class TestSimpleAppLifecycleCallbacks:
             mock_link.set_status = Mock()
 
             app._get_link = Mock(return_value=mock_link)
-            app._build_result_tooltip = Mock(return_value="Test failed")
-            app._get_command_string = Mock(return_value="echo test")
+
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_completed = Mock(return_value="Test failed")
+            app.tooltip_builder.build_play_tooltip = Mock(return_value="Play test")
+            app.tooltip_builder.build_output_tooltip = Mock(return_value="Output test")
 
             # Create a handle with output_file
             output_file = Path("/tmp/test_output.txt")
@@ -177,8 +185,8 @@ class TestSimpleAppLifecycleCallbacks:
     @pytest.mark.asyncio
     async def test_on_command_cancelled_with_output_file(self, mock_adapter, mock_config_path):
         """Test _on_command_cancelled sets output_path when output_file exists."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Create a mock link
             mock_link = Mock()
@@ -186,8 +194,12 @@ class TestSimpleAppLifecycleCallbacks:
             mock_link.set_status = Mock()
 
             app._get_link = Mock(return_value=mock_link)
-            app._build_result_tooltip = Mock(return_value="Test cancelled")
-            app._get_command_string = Mock(return_value="echo test")
+
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_completed = Mock(return_value="Test cancelled")
+            app.tooltip_builder.build_play_tooltip = Mock(return_value="Play test")
+            app.tooltip_builder.build_output_tooltip = Mock(return_value="Output test")
 
             # Create a handle with output_file
             output_file = Path("/tmp/test_output.txt")
@@ -203,15 +215,19 @@ class TestSimpleAppLifecycleCallbacks:
     @pytest.mark.asyncio
     async def test_on_command_started(self, mock_adapter, mock_config_path):
         """Test _on_command_started updates link status."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Create a mock link
             mock_link = Mock()
             mock_link.set_status = Mock()
 
             app._get_link = Mock(return_value=mock_link)
-            app._build_running_tooltip = Mock(return_value="Test running")
+
+            # Mock tooltip_builder
+            app.tooltip_builder = Mock()
+            app.tooltip_builder.build_status_tooltip_running = Mock(return_value="Test running")
+            app.tooltip_builder.build_stop_tooltip = Mock(return_value="Stop test")
 
             # Create a handle
             handle = RunHandle(name="Test")
@@ -229,14 +245,14 @@ class TestSimpleAppLifecycleCallbacks:
             assert call_kwargs["icon"] == "⏳"
 
 
-class TestSimpleAppReload:
+class TestCmdorcAppReload:
     """Test configuration reload functionality."""
 
     @pytest.mark.asyncio
     async def test_reload_config_awaits_removal(self, mock_adapter, mock_config_path):
         """Test that reload awaits file_list.remove()."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Create a mock file_list with async remove
             mock_file_list = Mock()
@@ -261,8 +277,8 @@ class TestSimpleAppReload:
     @pytest.mark.asyncio
     async def test_reload_config_detaches_old_adapter(self, mock_adapter, mock_config_path):
         """Test that reload detaches the old adapter."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Set up mocks
             app.file_list = Mock()
@@ -282,63 +298,13 @@ class TestSimpleAppReload:
             mock_adapter.detach.assert_called_once()
 
 
-class TestSimpleAppTooltipBuilders:
-    """Test tooltip builder methods."""
-
-    def test_build_idle_tooltip_with_keyboard_shortcut(self, mock_adapter, mock_config_path):
-        """Test _build_idle_tooltip includes keyboard shortcut."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
-            app.adapter = mock_adapter
-
-            # Mock command config with proper list of commands
-            mock_cmd1 = Mock()
-            mock_cmd1.name = "Test"
-            mock_cmd1.triggers = ["manual", "file_changed"]
-            mock_cmd2 = Mock()
-            mock_cmd2.name = "Build"
-            mock_cmd2.triggers = []
-
-            app.adapter.orchestrator.runner_config.commands = [mock_cmd1, mock_cmd2]
-
-            # Mock get_history to return empty (no history loaded)
-            mock_adapter.orchestrator.get_history.return_value = []
-
-            tooltip = app._build_status_tooltip_idle("Test")
-
-            # Should show "Not yet run" when no history available
-            assert "Not yet run" in tooltip
-
-    def test_build_running_tooltip(self, mock_adapter, mock_config_path):
-        """Test _build_status_tooltip_running shows elapsed time."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
-            app.adapter = mock_adapter
-
-            # Create a handle with start_time
-            from datetime import datetime
-            handle = Mock()
-            handle.start_time = datetime.now().timestamp()
-
-            # Mock preview_command to return a command
-            mock_preview = Mock()
-            mock_preview.command = "test command"
-            mock_adapter.orchestrator.preview_command.return_value = mock_preview
-
-            tooltip = app._build_status_tooltip_running("Test", handle)
-
-            # Should include "Running" text and command
-            assert "Running" in tooltip or "⏳" in tooltip
-            assert "test command" in tooltip
-
-
-class TestSimpleAppGetLink:
+class TestCmdorcAppGetLink:
     """Test _get_link helper method."""
 
     def test_get_link_returns_link(self, mock_adapter, mock_config_path):
         """Test _get_link returns CommandLink using query_one."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Create a mock link
             mock_link = Mock()
@@ -354,8 +320,8 @@ class TestSimpleAppGetLink:
 
     def test_get_link_returns_none_for_unknown_command(self, mock_adapter, mock_config_path):
         """Test _get_link returns None when query_one raises exception."""
-        with patch("textual_cmdorc.simple_app.OrchestratorAdapter", return_value=mock_adapter):
-            app = SimpleApp(config_path=mock_config_path)
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            app = CmdorcApp(config_path=mock_config_path)
 
             # Mock query_one to raise exception (command not found)
             app.query_one = Mock(side_effect=Exception("No screens on stack"))

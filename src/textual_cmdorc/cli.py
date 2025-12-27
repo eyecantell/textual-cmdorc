@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from textual_cmdorc import __version__
-from textual_cmdorc.simple_app import SimpleApp
+from textual_cmdorc.cmdorc_app import CmdorcApp
 
 logging.getLogger("textual_cmdorc").setLevel(logging.DEBUG)
 
@@ -132,7 +132,7 @@ def main() -> None:
             sys.exit(1)
 
         # Launch the app
-        app = SimpleApp(config_path=str(config_path))
+        app = CmdorcApp(config_path=str(config_path))
         app.run()
 
     except KeyboardInterrupt:

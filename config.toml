@@ -1,0 +1,37 @@
+# Auto-generated config.toml for cmdorc-tui
+
+[variables]
+base_dir = "."
+
+[output_storage]
+directory = ".cmdorc/outputs"
+keep_history = 10
+
+[[file_watcher]]
+dir = "."
+patterns = ["**/*.py"]
+trigger = "py_file_changed"
+debounce_ms = 300
+ignore_dirs = ["__pycache__", ".git", "venv", ".venv"]
+
+[[command]]
+name = "Lint"
+command = "ruff check --fix ."
+triggers = ["py_file_changed"]
+max_concurrent = 1
+
+[[command]]
+name = "Format"
+command = "ruff format ."
+triggers = ["command_success:Lint"]
+max_concurrent = 1
+
+[[command]]
+name = "Tests"
+command = "pdm run pytest {{ base_dir }}/tests"
+triggers = ["command_success:Format"]
+
+[keyboard]
+shortcuts = { Lint = "1", Format = "2", Tests = "3" }
+enabled = true
+show_in_tooltips = true

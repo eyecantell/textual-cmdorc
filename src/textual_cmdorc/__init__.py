@@ -2,13 +2,13 @@
 
 __version__ = "0.1.0"
 
-# Public API - Simplified architecture (Phase 7+)
+# Public API
 from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
-from textual_cmdorc.simple_app import SimpleApp
+from textual_cmdorc.cmdorc_app import CmdorcApp
 
 __all__ = [
     "__version__",
     # Primary components
-    "SimpleApp",
+    "CmdorcApp",
     "OrchestratorAdapter",
 ]
