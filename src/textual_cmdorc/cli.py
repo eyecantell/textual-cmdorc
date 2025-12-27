@@ -1,11 +1,14 @@
 """CLI entry point for cmdorc-tui: auto-generates default config and launches the TUI."""
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
 from textual_cmdorc import __version__
 from textual_cmdorc.simple_app import SimpleApp
+
+logging.getLogger("textual_cmdorc").setLevel(logging.DEBUG)
 
 # Default config template for Python development workflows
 DEFAULT_CONFIG_TEMPLATE = """\

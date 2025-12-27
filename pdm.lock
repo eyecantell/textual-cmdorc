@@ -5,7 +5,7 @@
 groups = ["default", "dev", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:2a4c5568c5aaa2c1e0b9db92ab0b6705149c0a4354421bc62e62e13747bebb41"
+content_hash = "sha256:29c8c76b92e7797ddd135e7d8f9a1191b364942d5b6cb726e58f4a7e788841c5"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -224,7 +224,7 @@ files = [
 
 [[package]]
 name = "cmdorc"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.10"
 summary = "Async-first, trigger-driven shell command orchestrator for TUIs and agents"
 groups = ["default"]
@@ -232,8 +232,8 @@ dependencies = [
     "tomli>=2.3.0; python_version < \"3.11\"",
 ]
 files = [
-    {file = "cmdorc-0.3.0-py3-none-any.whl", hash = "sha256:373de9d688911d2a907e655ce5a4182afc5519149fb80c37c608fcf6559a6825"},
-    {file = "cmdorc-0.3.0.tar.gz", hash = "sha256:f31296213457aa03557a18d2a05f0ea7fdad3260b2e33ab3e508134debc901a3"},
+    {file = "cmdorc-0.4.0-py3-none-any.whl", hash = "sha256:8da71f5dc74a4b89693c15bc55732f7fcdf972480345f22e5b55e58d3f2758e3"},
+    {file = "cmdorc-0.4.0.tar.gz", hash = "sha256:836b28a9b9a149c7a00d81d8bffe35c7f7eff06373f0c589e5f1f847076ae405"},
 ]
 
 [[package]]
@@ -710,7 +710,7 @@ name = "linkify-it-py"
 version = "2.0.3"
 requires_python = ">=3.7"
 summary = "Links recognition library with FULL unicode support."
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 dependencies = [
     "uc-micro-py",
 ]
@@ -724,7 +724,7 @@ name = "markdown-it-py"
 version = "4.0.0"
 requires_python = ">=3.10"
 summary = "Python port of markdown-it. Markdown parsing, done right!"
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 dependencies = [
     "mdurl~=0.1",
 ]
@@ -739,7 +739,7 @@ version = "4.0.0"
 extras = ["linkify"]
 requires_python = ">=3.10"
 summary = "Python port of markdown-it. Markdown parsing, done right!"
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 dependencies = [
     "linkify-it-py<3,>=1",
     "markdown-it-py==4.0.0",
@@ -841,7 +841,7 @@ name = "mdit-py-plugins"
 version = "0.5.0"
 requires_python = ">=3.10"
 summary = "Collection of plugins for markdown-it-py"
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 dependencies = [
     "markdown-it-py<5.0.0,>=2.0.0",
 ]
@@ -855,7 +855,7 @@ name = "mdurl"
 version = "0.1.2"
 requires_python = ">=3.7"
 summary = "Markdown URL utilities"
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 files = [
     {file = "mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8"},
     {file = "mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba"},
@@ -1150,7 +1150,7 @@ name = "platformdirs"
 version = "4.5.1"
 requires_python = ">=3.10"
 summary = "A small Python package for determining appropriate platform-specific dirs, e.g. a `user data dir`."
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 files = [
     {file = "platformdirs-4.5.1-py3-none-any.whl", hash = "sha256:d03afa3963c806a9bed9d5125c8f4cb2fdaf74a55ab60e5d59b3fde758104d31"},
     {file = "platformdirs-4.5.1.tar.gz", hash = "sha256:61d5cdcc6065745cdd94f0f878977f8de9437be93de97c1c12f853c9c0cdcbda"},
@@ -1351,7 +1351,7 @@ name = "rich"
 version = "14.2.0"
 requires_python = ">=3.8.0"
 summary = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 dependencies = [
     "markdown-it-py>=2.2.0",
     "pygments<3.0.0,>=2.13.0",
@@ -1394,7 +1394,7 @@ name = "textual"
 version = "6.11.0"
 requires_python = "<4.0,>=3.9"
 summary = "Modern Text User Interface framework"
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 dependencies = [
     "markdown-it-py[linkify]>=2.1.0",
     "mdit-py-plugins",
@@ -1406,6 +1406,21 @@ dependencies = [
 files = [
     {file = "textual-6.11.0-py3-none-any.whl", hash = "sha256:9e663b73ed37123a9b13c16a0c85e09ef917a4cfded97814361ed5cccfa40f89"},
     {file = "textual-6.11.0.tar.gz", hash = "sha256:08237ebda0cfbbfd1a4e2fd3039882b35894a73994f6f0fcc12c5b0d78acf3cc"},
+]
+
+[[package]]
+name = "textual-capture"
+version = "0.3.0"
+requires_python = ">=3.9"
+summary = "Sequenced screen capture for Textual TUI applications. Enables AI assistants to review and test TUIs."
+groups = ["test"]
+dependencies = [
+    "textual>=6.11.0",
+    "tomli>=2.0.0; python_version < \"3.11\"",
+]
+files = [
+    {file = "textual_capture-0.3.0-py3-none-any.whl", hash = "sha256:8ce840280bb7aa29aebd4a624cd1f0422399c218356b56fb78157b5235d645cc"},
+    {file = "textual_capture-0.3.0.tar.gz", hash = "sha256:5ef7050e60ef0d390ef0d53c0a6e4775b71ce10d922e9606ac293bf8b332f1ff"},
 ]
 
 [[package]]
@@ -1429,7 +1444,7 @@ files = [
 
 [[package]]
 name = "textual-filelink"
-version = "0.5.0"
+version = "0.6.0"
 requires_python = ">=3.9"
 summary = "Clickable file links with icons, toggles, and command orchestration widget for Textual TUI applications."
 groups = ["default"]
@@ -1437,8 +1452,8 @@ dependencies = [
     "textual>=6.11.0",
 ]
 files = [
-    {file = "textual_filelink-0.5.0-py3-none-any.whl", hash = "sha256:e33e9d525c26e3031b0225f704e2b2bf59bcdf9564ab62233cc904fab93fd6fa"},
-    {file = "textual_filelink-0.5.0.tar.gz", hash = "sha256:e30edcfdeac3c69d11ca16ce34d5a55a06ca1ce5755084cdd92ff6f8f6596690"},
+    {file = "textual_filelink-0.6.0-py3-none-any.whl", hash = "sha256:e3ae6ace5949c1bf790d9fb7e0024e3010a36297a4132f984f39f6a360250478"},
+    {file = "textual_filelink-0.6.0.tar.gz", hash = "sha256:de0836f8b62916649660e27b2849930f7101589e468e4c54b62c40815224e9f7"},
 ]
 
 [[package]]
@@ -1527,7 +1542,7 @@ name = "uc-micro-py"
 version = "1.0.3"
 requires_python = ">=3.7"
 summary = "Micro subset of unicode data files for linkify-it-py projects."
-groups = ["default", "dev"]
+groups = ["default", "dev", "test"]
 files = [
     {file = "uc-micro-py-1.0.3.tar.gz", hash = "sha256:d321b92cff673ec58027c04015fcaa8bb1e005478643ff4a500882eaab88c48a"},
     {file = "uc_micro_py-1.0.3-py3-none-any.whl", hash = "sha256:db1dffff340817673d7b466ec86114a9dc0e9d4d9b5ba229d9d60e5c12600cd5"},

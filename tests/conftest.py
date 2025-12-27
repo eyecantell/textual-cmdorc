@@ -39,14 +39,28 @@ class RunResult:
         self.output = output
 
 
+class ResolvedCommand:
+    """Mock ResolvedCommand."""
+
+    def __init__(self, command="echo test", cwd=None, env=None, timeout_secs=None, vars=None):
+        self.command = command
+        self.cwd = cwd
+        self.env = env or {}
+        self.timeout_secs = timeout_secs
+        self.vars = vars or {}
+
+
 class RunHandle:
     """Mock RunHandle."""
 
-    def __init__(self, name="test", trigger_chain=None):
+    def __init__(self, name="test", trigger_chain=None, output_file=None, metadata_file=None):
         self.name = name
         self.trigger_chain = trigger_chain or []
         self._result = RunResult()
         self.is_finalized = True
+        self.output_file = output_file
+        self.metadata_file = metadata_file
+        self.resolved_command = ResolvedCommand(command="echo test")
 
 
 class CommandOrchestrator:
@@ -128,6 +142,7 @@ cmdorc_module = MagicMock()
 cmdorc_module.RunState = RunState
 cmdorc_module.CommandConfig = CommandConfig
 cmdorc_module.RunResult = RunResult
+cmdorc_module.ResolvedCommand = ResolvedCommand
 cmdorc_module.RunHandle = RunHandle
 cmdorc_module.CommandOrchestrator = CommandOrchestrator
 cmdorc_module.RunnerConfig = RunnerConfig

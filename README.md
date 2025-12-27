@@ -92,7 +92,7 @@ class MyApp(App):
         # Populate list with commands
         for cmd_name in self.adapter.get_command_names():
             link = CommandLink(
-                name=cmd_name,
+                command_name=cmd_name,
                 output_path=None,
                 initial_status_icon="◯",
                 initial_status_tooltip=f"Run {cmd_name}"
