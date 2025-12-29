@@ -116,6 +116,7 @@ class TestCmdorcWidgetLifecycleCallbacks:
             output_file = Path("/tmp/test_output.txt")
             handle = RunHandle(name="Test", output_file=output_file)
             handle.end_time = datetime.now()  # Add end_time for timer tests
+            handle.time_ago_str = "1m ago"  # Add time_ago_str for tooltips
 
             # Call the callback
             widget._on_command_success("Test", handle)
@@ -147,6 +148,7 @@ class TestCmdorcWidgetLifecycleCallbacks:
             # Create a handle without output_file
             handle = RunHandle(name="Test", output_file=None)
             handle.end_time = datetime.now()  # Add end_time for timer tests
+            handle.time_ago_str = "1m ago"  # Add time_ago_str for tooltips
 
             # Call the callback
             widget._on_command_success("Test", handle)
@@ -178,6 +180,7 @@ class TestCmdorcWidgetLifecycleCallbacks:
             output_file = Path("/tmp/test_output.txt")
             handle = RunHandle(name="Test", output_file=output_file)
             handle.end_time = datetime.now()  # Add end_time for timer tests
+            handle.time_ago_str = "1m ago"  # Add time_ago_str for tooltips
 
             # Call the callback
             widget._on_command_failed("Test", handle)
@@ -209,6 +212,7 @@ class TestCmdorcWidgetLifecycleCallbacks:
             output_file = Path("/tmp/test_output.txt")
             handle = RunHandle(name="Test", output_file=output_file)
             handle.end_time = datetime.now()  # Add end_time for timer tests
+            handle.time_ago_str = "1m ago"  # Add time_ago_str for tooltips
 
             # Call the callback
             widget._on_command_cancelled("Test", handle)
@@ -352,6 +356,7 @@ class TestCmdorcWidgetInitialStatus:
             mock_last_run.state.name = "SUCCESS"
             mock_last_run.output_file = None
             mock_last_run.end_time = datetime.now()  # Add end_time for timer tests
+            mock_last_run.time_ago_str = "1m ago"  # Add time_ago_str for tooltips
             mock_status.last_run = mock_last_run
             mock_adapter.orchestrator.get_status.return_value = mock_status
 
@@ -389,6 +394,7 @@ class TestCmdorcWidgetInitialStatus:
             mock_last_run.state.name = "FAILED"
             mock_last_run.output_file = None
             mock_last_run.end_time = datetime.now()  # Add end_time for timer tests
+            mock_last_run.time_ago_str = "1m ago"  # Add time_ago_str for tooltips
             mock_status.last_run = mock_last_run
             mock_adapter.orchestrator.get_status.return_value = mock_status
 
@@ -426,6 +432,7 @@ class TestCmdorcWidgetInitialStatus:
             mock_last_run.state.name = "CANCELLED"
             mock_last_run.output_file = None
             mock_last_run.end_time = datetime.now()  # Add end_time for timer tests
+            mock_last_run.time_ago_str = "1m ago"  # Add time_ago_str for tooltips
             mock_status.last_run = mock_last_run
             mock_adapter.orchestrator.get_status.return_value = mock_status
 

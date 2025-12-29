@@ -11,7 +11,7 @@ from cmdorc import RunHandle
 from cmdorc_frontend.models import TriggerSource
 from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
 
-from .formatting import format_elapsed_time, format_time_ago, get_output_preview
+from .formatting import format_elapsed_time, get_output_preview
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class TooltipBuilder:
                 else:
                     lines.append("Last run:")
 
-                for result in history:
+                for result in reversed(history):
                     # Status icon
                     icon = {
                         "SUCCESS": "✅",
@@ -71,10 +71,8 @@ class TooltipBuilder:
                         "CANCELLED": "⚠️",
                     }.get(result.state.name, "◯")
 
-                    # Time ago
-                    ago = format_time_ago(result.end_time) if result.end_time else "?"
-
-                    # Duration
+                    # Time ago and duration (from cmdorc)
+                    ago = result.time_ago_str or "?"
                     duration = result.duration_str or "?"
 
                     lines.append(f"  {icon} {ago} for {duration}")
@@ -152,7 +150,7 @@ class TooltipBuilder:
             if history and len(history) > 1:
                 # Show last 3 runs
                 lines.append("Last 3 runs:")
-                for result in history:
+                for result in reversed(history):
                     # Status icon
                     icon = {
                         "SUCCESS": "✅",
@@ -160,17 +158,15 @@ class TooltipBuilder:
                         "CANCELLED": "⚠️",
                     }.get(result.state.name, "◯")
 
-                    # Time ago
-                    ago = format_time_ago(result.end_time) if result.end_time else "?"
-
-                    # Duration
+                    # Time ago and duration (from cmdorc)
+                    ago = result.time_ago_str or "?"
                     duration = result.duration_str or "?"
 
                     lines.append(f"  {icon} {ago} for {duration}")
             else:
-                # Single run info
+                # Single run info (from cmdorc)
                 icon = {"SUCCESS": "✅", "FAILED": "❌", "CANCELLED": "⚠️"}.get(handle.state.name, "◯")
-                ago = format_time_ago(handle.end_time) if handle.end_time else "?"
+                ago = handle.time_ago_str or "?"
                 duration = handle.duration_str or "?"
 
                 lines.append("Last run:")

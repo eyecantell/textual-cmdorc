@@ -40,6 +40,7 @@ class TestTooltipBuilderStatusTooltips:
         mock_result.state.name = "SUCCESS"
         mock_result.end_time = datetime.now().timestamp()
         mock_result.duration_str = "1.5s"
+        mock_result.time_ago_str = "1m ago"
 
         mock_adapter.orchestrator.get_history.return_value = [mock_result]
         mock_adapter.orchestrator.preview_command.return_value = Mock(command="echo test")
@@ -59,6 +60,7 @@ class TestTooltipBuilderStatusTooltips:
             result.state.name = "SUCCESS"
             result.end_time = datetime.now().timestamp()
             result.duration_str = f"{i}.5s"
+            result.time_ago_str = f"{i}m ago"
             mock_results.append(result)
 
         mock_adapter.orchestrator.get_history.return_value = mock_results
@@ -76,6 +78,7 @@ class TestTooltipBuilderStatusTooltips:
         mock_result.state.name = "FAILED"
         mock_result.end_time = datetime.now().timestamp()
         mock_result.duration_str = "1.5s"
+        mock_result.time_ago_str = "1m ago"
 
         mock_adapter.orchestrator.get_history.return_value = [mock_result]
         mock_adapter.orchestrator.preview_command.return_value = Mock(command="echo test")
@@ -113,6 +116,7 @@ class TestTooltipBuilderStatusTooltips:
         mock_handle.state.name = "SUCCESS"
         mock_handle.end_time = datetime.now().timestamp()
         mock_handle.duration_str = "1.5s"
+        mock_handle.time_ago_str = "1m ago"
 
         mock_adapter.orchestrator.get_history.return_value = [mock_handle]
         mock_adapter.orchestrator.preview_command.return_value = Mock(command="echo test")
@@ -131,6 +135,7 @@ class TestTooltipBuilderStatusTooltips:
             result.state.name = "SUCCESS"
             result.end_time = datetime.now().timestamp()
             result.duration_str = f"{i}.5s"
+            result.time_ago_str = f"{i}m ago"
             mock_results.append(result)
 
         mock_adapter.orchestrator.get_history.return_value = mock_results

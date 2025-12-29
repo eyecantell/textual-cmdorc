@@ -33,9 +33,10 @@ class CommandConfig:
 class RunResult:
     """Mock RunResult."""
 
-    def __init__(self, state=RunState.SUCCESS, duration_str="0.1s", output=None):
+    def __init__(self, state=RunState.SUCCESS, duration_str="0.1s", time_ago_str="1m ago", output=None):
         self.state = state
         self.duration_str = duration_str
+        self.time_ago_str = time_ago_str
         self.output = output
 
 
