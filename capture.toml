@@ -1,0 +1,24 @@
+app_module = "textual_cmdorc.cmdorc_app"
+app_class = "CmdorcApp"
+module_path = "/mounted/dev/textual-cmdorc/src/textual_cmdorc"
+
+[[step]]
+type = "capture"
+
+[[step]]
+type = "press"
+keys = ["1"]
+
+[[step]]
+type = "delay"
+seconds = 0.5
+
+[[step]]
+type = "capture"
+
+[[step]]
+type = "delay"
+seconds = 2.0
+
+[[step]]
+type = "capture"

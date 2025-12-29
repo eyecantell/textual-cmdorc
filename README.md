@@ -7,11 +7,14 @@
 
 A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmdorc), displaying commands in a flat list with real-time status updates, manual controls, and file watching.
 
-**Key Design:** Direct and simple. A single `SimpleApp` class wraps cmdorc's `CommandOrchestrator` with a flat list UI powered by [textual-filelink](https://github.com/eyecantell/textual-filelink).
+**Key Design:** Clean architecture with two layers:
+- `CmdorcWidget`: Composable widget for embedding in multi-panel layouts
+- `CmdorcApp`: Standalone app (wraps CmdorcWidget with Header/Footer)
+- `OrchestratorAdapter`: Framework-agnostic backend for headless/custom UIs
 
-**Current Status:** ✅ Production ready (59 tests, 29% coverage). ~500 lines of code.
+**Current Status:** ✅ Production ready (122 tests, 74% coverage). ~750 lines of code.
 
-**Ideal for:** Developer tools, automation monitoring, CI/CD interfaces, or as a subcomponent in larger TUIs.
+**Ideal for:** Developer tools, automation monitoring, CI/CD interfaces, or as a widget in larger TUIs.
 
 ## Features
 
@@ -32,9 +35,9 @@ A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmd
 - 🔄 **Live Reload**: Press `[r]` to reload configuration without restarting
 
 ### Embedding & Extensibility
-- 🔗 **Embeddable**: Use OrchestratorAdapter directly for headless or custom UI scenarios
+- 🔗 **Embeddable Widget**: Use CmdorcWidget in multi-column layouts or complex UIs
 - 🎛️ **Framework Agnostic Backend**: OrchestratorAdapter has no Textual dependencies
-- 📦 **Simple Integration**: Import SimpleApp and run with a config path
+- 📦 **Simple Integration**: Import CmdorcApp for standalone or CmdorcWidget for embedding
 
 ## Quick Start
 
@@ -52,15 +55,42 @@ cmdorc-tui --config my-config.toml
 
 ### Programmatic Usage
 ```python
-from textual_cmdorc import SimpleApp
+from textual_cmdorc import CmdorcApp
 
-app = SimpleApp(config_path="config.toml")
+app = CmdorcApp(config_path="config.toml")
 app.run()
 ```
 
-### Embedding in Larger Applications
+### Embedding in 3-Column Layouts
 
-For most embedding scenarios, use **OrchestratorAdapter** directly to build custom UIs:
+Use **CmdorcWidget** for clean embedding in multi-panel UIs:
+
+```python
+from textual.app import App, ComposeResult
+from textual.containers import Horizontal
+from textual.widgets import Header, Footer, Static
+from textual_cmdorc import CmdorcWidget
+
+class My3ColumnApp(App):
+    def compose(self) -> ComposeResult:
+        yield Header()
+
+        with Horizontal():
+            yield Static("Left Panel", classes="panel")
+            yield CmdorcWidget("config.toml")  # Center: command orchestration
+            yield Static("Right Panel", classes="panel")
+
+        yield Footer()
+
+app = My3ColumnApp()
+app.run()
+```
+
+See [`examples/embedding_3column.py`](examples/embedding_3column.py) for a complete example.
+
+### Advanced: Custom UI with OrchestratorAdapter
+
+For headless scenarios or completely custom UIs, use **OrchestratorAdapter** directly:
 
 ```python
 from textual.app import App, ComposeResult
@@ -157,12 +187,18 @@ Run `cmdorc-tui` without a config file to auto-generate a starter config.
 
 ## Architecture
 
-### SimpleApp (TUI Shell)
-A single Textual App class that:
+### CmdorcWidget (Composable Widget)
+A Textual Widget that:
 1. Loads config and creates `OrchestratorAdapter`
 2. Builds a `FileLinkList` with `CommandLink` widgets in TOML order
 3. Wires lifecycle callbacks to update UI on command state changes
-4. Handles keyboard shortcuts and global actions (help, reload, quit)
+4. Binds keyboard shortcuts to commands
+5. Can be embedded anywhere in a Textual app (e.g., 3-column layouts)
+
+### CmdorcApp (Standalone TUI)
+A thin wrapper around `CmdorcWidget` that adds:
+- Header and Footer widgets
+- Global actions (help screen, config reload, quit)
 
 ### OrchestratorAdapter (Framework-Agnostic Backend)
 A non-Textual adapter that:
@@ -174,11 +210,11 @@ A non-Textual adapter that:
 
 ## API Reference
 
-### SimpleApp
+### CmdorcApp
 ```python
-from textual_cmdorc import SimpleApp
+from textual_cmdorc import CmdorcApp
 
-app = SimpleApp(config_path="config.toml")
+app = CmdorcApp(config_path="config.toml")
 app.run()
 ```
 
@@ -253,7 +289,7 @@ pdm run ruff check .
 pdm run ruff format .
 
 # Run app
-pdm run python -m textual_cmdorc.simple_app
+pdm run cmdorc-tui
 ```
 
 ## Architecture Decisions
@@ -265,9 +301,9 @@ The original design used a hierarchical tree to visualize trigger relationships.
 3. **Easier to maintain**: No tree reconciliation, cycle detection, or duplicate handling
 4. **Still functional**: Trigger chains work via cmdorc, tooltips show relationships
 
-### Why SimpleApp Instead of Controller+View Split?
+### Why CmdorcWidget + CmdorcApp Instead of Controller+View Split?
 The original embeddable architecture split concerns into `CmdorcController` (non-Textual) and `CmdorcView` (Textual widget). The new design simplifies to:
-- **SimpleApp**: All-in-one TUI shell for standalone use
+- **CmdorcWidget + CmdorcApp**: Composable widget for embedding, wrapped by CmdorcApp for standalone use
 - **OrchestratorAdapter**: Framework-agnostic backend for advanced embedding
 
 This is simpler for 90% of use cases while still supporting headless/custom UI scenarios via OrchestratorAdapter.
@@ -282,7 +318,7 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 - ✅ Help screen (modal with shortcuts)
 - ✅ Config reload (live without restart)
 - ✅ CLI with auto-config generation
-- ✅ 59 passing tests (29% coverage)
+- ✅ 122 passing tests (74% coverage)
 
 ### Known Limitations
 - No log pane (use terminal output instead)

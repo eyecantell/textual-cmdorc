@@ -7,10 +7,15 @@ Enhanced with rich tooltips showing:
 - Status icon: Run history with results
 - Play/Stop button: Trigger conditions and chains
 - Command name: Output file preview (last 5 lines)
+
+Architecture:
+- CmdorcWidget: Composable widget for embedding in other apps
+- CmdorcApp: Standalone app wrapping CmdorcWidget with Header/Footer
 """
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 
 from cmdorc import RunHandle
@@ -18,6 +23,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
+from textual.widget import Widget
 from textual.widgets import Footer, Header, Static
 from textual_filelink import CommandLink, FileLinkList, sanitize_id
 
@@ -65,29 +71,35 @@ class HelpScreen(ModalScreen):
             yield Static("Press ESC to close", classes="help-footer")
 
 
-class CmdorcApp(App):
-    """TUI application for cmdorc command orchestration.
+class CmdorcWidget(Widget):
+    """Composable widget for cmdorc command orchestration.
+
+    This widget contains all the core orchestration logic and can be embedded
+    in other Textual apps (e.g., as part of a 3-column layout).
 
     Key features:
     - Flat list of commands in TOML order
     - Direct CommandLink usage (no wrappers)
     - Lifecycle callbacks from OrchestratorAdapter
-    - Enhanced tooltips:
-      - Status icon: Run history and results
-      - Play/Stop: Trigger conditions and chains
-      - Command name: Output preview (last 5 lines)
+    - Enhanced tooltips for status, triggers, and output
+
+    Usage (Embedded in another app):
+        class MyApp(App):
+            def compose(self):
+                with Horizontal():
+                    yield LeftPanel()
+                    yield CmdorcWidget("config.toml")
+                    yield RightPanel()
+
+    Usage (Standalone - prefer CmdorcApp):
+        widget = CmdorcWidget("config.toml")
+        # Note: For standalone use, use CmdorcApp instead which adds Header/Footer
     """
 
-    TITLE = "cmdorc"
-    BINDINGS = [
-        Binding("h", "show_help", "Help"),
-        Binding("r", "reload_config", "Reload"),
-        Binding("q", "quit", "Quit"),
-    ]
-
     CSS = """
-    Screen {
-        layout: vertical;
+    CmdorcWidget {
+        height: 1fr;
+        width: 1fr;
     }
 
     FileLinkList {
@@ -99,32 +111,10 @@ class CmdorcApp(App):
         width: 100%;
         margin: 0 0 1 0;
     }
-
-    HelpScreen {
-        align: center middle;
-    }
-
-    HelpScreen > Vertical {
-        width: 60;
-        height: auto;
-        background: $panel;
-        border: solid $accent;
-        padding: 2;
-    }
-
-    .help-header {
-        text-style: bold;
-        color: $accent;
-    }
-
-    .help-footer {
-        text-style: italic;
-        color: $text-muted;
-    }
     """
 
     def __init__(self, config_path: str = "config.toml", **kwargs):
-        """Initialize app.
+        """Initialize widget.
 
         Args:
             config_path: Path to TOML config file
@@ -139,9 +129,7 @@ class CmdorcApp(App):
         self.running_commands: set[str] = set()
 
     def compose(self) -> ComposeResult:
-        """Compose app layout."""
-        yield Header()
-
+        """Compose widget layout."""
         try:
             # Create adapter (loads config, creates orchestrator)
             self.adapter = OrchestratorAdapter(self.config_path)
@@ -160,10 +148,8 @@ class CmdorcApp(App):
 
         except Exception as e:
             # Fatal config error
-            logger.error(f"Failed to initialize app: {e}")
+            logger.error(f"Failed to initialize widget: {e}")
             yield Static(f"❌ Configuration Error: {e}")
-
-        yield Footer()
 
     async def on_mount(self) -> None:
         """Attach adapter to event loop, populate list, and wire callbacks."""
@@ -188,6 +174,11 @@ class CmdorcApp(App):
                         if status and status.last_run and status.last_run.output_file:
                             initial_output_path = status.last_run.output_file
 
+                        # Extract end_time for timer display (convert to timestamp)
+                        initial_end_time = None
+                        if status and status.last_run and status.last_run.end_time:
+                            initial_end_time = status.last_run.end_time.timestamp()
+
                         # Determine initial status icon based on history
                         initial_status_icon = "◯"  # Default to idle
                         if status and status.last_run:
@@ -202,8 +193,10 @@ class CmdorcApp(App):
                         link = CommandLink(
                             command_name=cmd_name,
                             output_path=initial_output_path,
+                            end_time=initial_end_time,
                             initial_status_icon=initial_status_icon,
                             initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
+                            show_timer=True,
                             show_settings=True,
                             tooltip=self.tooltip_builder.build_output_tooltip(cmd_name),
                         )
@@ -253,11 +246,10 @@ class CmdorcApp(App):
             self._bind_keyboard_shortcuts()
 
         except Exception as e:
-            logger.error(f"Failed to mount app: {e}", exc_info=True)
-            self.exit(message=f"Error: {e}")
+            logger.error(f"Failed to mount widget: {e}", exc_info=True)
 
     async def on_unmount(self) -> None:
-        """Cleanup on exit."""
+        """Cleanup on widget removal."""
         if self.adapter:
             self.adapter.detach()
 
@@ -274,14 +266,16 @@ class CmdorcApp(App):
                 continue
 
             # Bind key to toggle command (play if idle, stop if running)
-            self.bind(
-                key,
-                f"toggle_command('{cmd_name}')",
-                description=f"Run/Stop {cmd_name}",
-                show=False,
-            )
+            # Note: We bind on the app, not the widget, so we need to access app
+            if hasattr(self, "app") and self.app:
+                self.app.bind(
+                    key,
+                    f"toggle_command('{cmd_name}')",
+                    description=f"Run/Stop {cmd_name}",
+                    show=False,
+                )
 
-    async def action_toggle_command(self, cmd_name: str) -> None:
+    async def toggle_command(self, cmd_name: str) -> None:
         """Toggle command execution (play if idle, stop if running).
 
         Args:
@@ -313,6 +307,7 @@ class CmdorcApp(App):
                 running=True,
                 icon="⏳",
                 tooltip=f"Starting {cmd_name}...",
+                start_time=time.time(),  # Set estimated start time, will be updated with actual from handle
             )
 
         # Request execution (async, returns immediately)
@@ -371,7 +366,8 @@ class CmdorcApp(App):
             event: CommandLink.SettingsClicked message
         """
         logger.debug(f"Settings clicked: {event.name}")
-        self.notify(f"Settings for {event.name} (coming soon)")
+        if self.app:
+            self.app.notify(f"Settings for {event.name} (coming soon)")
 
     # ========================================================================
     # Lifecycle Callbacks (from OrchestratorAdapter)
@@ -397,11 +393,17 @@ class CmdorcApp(App):
             # Update stop button tooltip
             stop_tooltip = self.tooltip_builder.build_stop_tooltip(name, handle)
 
+            # Get start_time from handle, or use current time as fallback
+            start_time = (
+                handle.start_time.timestamp() if handle and handle.start_time else time.time()
+            )  # Fallback if handle doesn't have start_time yet
+
             link.set_status(
                 running=True,
                 icon="⏳",
                 tooltip=status_tooltip,
                 stop_tooltip=stop_tooltip,
+                start_time=start_time,
                 append_shortcuts=False,
             )
 
@@ -423,6 +425,7 @@ class CmdorcApp(App):
                 icon="✅",
                 tooltip=self.tooltip_builder.build_status_tooltip_completed(name, handle),
                 run_tooltip=self.tooltip_builder.build_play_tooltip(name),
+                end_time=handle.end_time.timestamp() if handle.end_time else None,
                 append_shortcuts=False,
             )
 
@@ -451,6 +454,7 @@ class CmdorcApp(App):
                 icon="❌",
                 tooltip=self.tooltip_builder.build_status_tooltip_completed(name, handle),
                 run_tooltip=self.tooltip_builder.build_play_tooltip(name),
+                end_time=handle.end_time.timestamp() if handle.end_time else None,
                 append_shortcuts=False,
             )
 
@@ -479,6 +483,7 @@ class CmdorcApp(App):
                 icon="⚠️",
                 tooltip=self.tooltip_builder.build_status_tooltip_completed(name, handle),
                 run_tooltip=self.tooltip_builder.build_play_tooltip(name),
+                end_time=handle.end_time.timestamp() if handle.end_time else None,
                 append_shortcuts=False,
             )
 
@@ -490,11 +495,15 @@ class CmdorcApp(App):
                 link.set_output_path(handle.output_file)
 
     # ========================================================================
-    # App Actions
+    # Public Methods
     # ========================================================================
 
-    async def action_reload_config(self) -> None:
-        """Reload configuration from disk (rebuilds entire list)."""
+    async def reload_config(self) -> None:
+        """Reload configuration from disk (rebuilds entire list).
+
+        Returns:
+            tuple: (success: bool, message: str)
+        """
         logger.info("Reloading configuration...")
 
         try:
@@ -523,7 +532,7 @@ class CmdorcApp(App):
             )
 
             # Mount new list FIRST
-            await self.mount(self.file_list, before=self.query_one(Footer))
+            await self.mount(self.file_list)
 
             # THEN populate it (after mounting)
             for cmd_name in self.adapter.get_command_names():
@@ -533,6 +542,11 @@ class CmdorcApp(App):
                     initial_output_path = None
                     if status and status.last_run and status.last_run.output_file:
                         initial_output_path = status.last_run.output_file
+
+                    # Extract end_time for timer display (convert to timestamp)
+                    initial_end_time = None
+                    if status and status.last_run and status.last_run.end_time:
+                        initial_end_time = status.last_run.end_time.timestamp()
 
                     # Determine initial status icon based on history
                     initial_status_icon = "◯"  # Default to idle
@@ -548,8 +562,10 @@ class CmdorcApp(App):
                     link = CommandLink(
                         command_name=cmd_name,
                         output_path=initial_output_path,
+                        end_time=initial_end_time,
                         initial_status_icon=initial_status_icon,
                         initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
+                        show_timer=True,
                         show_settings=True,
                         tooltip=self.tooltip_builder.build_output_tooltip(cmd_name),
                     )
@@ -599,25 +615,22 @@ class CmdorcApp(App):
             # Re-bind keyboard shortcuts
             self._bind_keyboard_shortcuts()
 
-            self.notify("Configuration reloaded", severity="information")
             logger.info("Configuration reloaded successfully")
+            return True, "Configuration reloaded"
 
         except Exception as e:
             logger.error(f"Failed to reload config: {e}")
-            self.notify(f"Failed to reload: {e}", severity="error")
+            return False, f"Failed to reload: {e}"
 
-    def action_show_help(self) -> None:
-        """Show help screen with keyboard shortcuts."""
-        if not self.adapter:
-            self.notify("Adapter not initialized", severity="warning")
-            return
+    def get_keyboard_shortcuts(self) -> dict[str, str]:
+        """Get keyboard shortcut mapping.
 
-        shortcuts = self.adapter.keyboard_config.shortcuts
-        self.push_screen(HelpScreen(shortcuts))
-
-    async def action_quit(self) -> None:
-        """Quit application."""
-        self.exit()
+        Returns:
+            Dict mapping command_name -> shortcut key
+        """
+        if self.adapter:
+            return self.adapter.get_keyboard_shortcuts()
+        return {}
 
     # ========================================================================
     # Helper Methods
@@ -638,6 +651,118 @@ class CmdorcApp(App):
         except Exception as e:
             logger.warning(f"Failed to get link for {cmd_name}: {e}")
             return None
+
+
+class CmdorcApp(App):
+    """Standalone TUI application for cmdorc command orchestration.
+
+    This is a thin wrapper around CmdorcWidget that adds:
+    - Header and Footer
+    - Help screen (h key)
+    - Reload config action (r key)
+    - Quit action (q key)
+
+    For embedding in other apps, use CmdorcWidget directly instead.
+
+    Usage:
+        app = CmdorcApp(config_path="config.toml")
+        app.run()
+    """
+
+    TITLE = "cmdorc"
+    BINDINGS = [
+        Binding("h", "show_help", "Help"),
+        Binding("r", "reload_config", "Reload"),
+        Binding("q", "quit", "Quit"),
+    ]
+
+    CSS = """
+    Screen {
+        layout: vertical;
+    }
+
+    HelpScreen {
+        align: center middle;
+    }
+
+    HelpScreen > Vertical {
+        width: 60;
+        height: auto;
+        background: $panel;
+        border: solid $accent;
+        padding: 2;
+    }
+
+    .help-header {
+        text-style: bold;
+        color: $accent;
+    }
+
+    .help-footer {
+        text-style: italic;
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, config_path: str = "config.toml", **kwargs):
+        """Initialize app.
+
+        Args:
+            config_path: Path to TOML config file
+        """
+        super().__init__(**kwargs)
+        self.config_path = config_path
+        self.cmdorc_widget: CmdorcWidget | None = None
+
+    def compose(self) -> ComposeResult:
+        """Compose app layout."""
+        yield Header()
+
+        try:
+            # Create and yield the widget
+            self.cmdorc_widget = CmdorcWidget(self.config_path)
+            yield self.cmdorc_widget
+
+        except Exception as e:
+            # Fatal config error
+            logger.error(f"Failed to initialize app: {e}")
+            yield Static(f"❌ Configuration Error: {e}")
+
+        yield Footer()
+
+    async def action_toggle_command(self, cmd_name: str) -> None:
+        """Toggle command execution (delegated to widget).
+
+        Args:
+            cmd_name: Command name to toggle
+        """
+        if self.cmdorc_widget:
+            await self.cmdorc_widget.toggle_command(cmd_name)
+
+    async def action_reload_config(self) -> None:
+        """Reload configuration from disk (delegated to widget)."""
+        if not self.cmdorc_widget:
+            self.notify("Widget not initialized", severity="warning")
+            return
+
+        success, message = await self.cmdorc_widget.reload_config()
+        if success:
+            self.notify(message, severity="information")
+        else:
+            self.notify(message, severity="error")
+
+    def action_show_help(self) -> None:
+        """Show help screen with keyboard shortcuts."""
+        if not self.cmdorc_widget:
+            self.notify("Widget not initialized", severity="warning")
+            return
+
+        shortcuts = self.cmdorc_widget.get_keyboard_shortcuts()
+        self.push_screen(HelpScreen(shortcuts))
+
+    async def action_quit(self) -> None:
+        """Quit application."""
+        self.exit()
 
 
 def main(config_path: str = "config.toml") -> None:

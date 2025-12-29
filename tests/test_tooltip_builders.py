@@ -315,10 +315,9 @@ class TestTooltipBuilderOutputTooltip:
             builder = TooltipBuilder(mock_adapter)
             tooltip = builder.build_output_tooltip("Test")
 
-            assert "Open:" in tooltip
-            assert str(output_file) in tooltip
-            assert "Last 5 lines:" in tooltip
-            assert "Line 1" in tooltip
+            # Tooltip format was simplified to avoid flashing
+            # Now just shows command name and click hint
+            assert "Test" in tooltip
             assert "Click to open in editor" in tooltip
         finally:
             output_file.unlink()
@@ -339,7 +338,10 @@ class TestTooltipBuilderOutputTooltip:
             builder = TooltipBuilder(mock_adapter)
             tooltip = builder.build_output_tooltip("Test")
 
-            assert "(empty output)" in tooltip
+            # Tooltip format was simplified to avoid flashing
+            # Empty output still shows command name and click hint
+            assert "Test" in tooltip
+            assert "Click to open in editor" in tooltip
         finally:
             output_file.unlink()
 

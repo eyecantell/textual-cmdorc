@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **textual-cmdorc** is an embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmdorc) command orchestration. It displays commands in a flat list with real-time status updates, manual controls, and file watching.
 
-- **Status:** Production ready (59 tests, 29% coverage)
+- **Status:** Production ready
 - **Python:** 3.10+
-- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.3.0+, watchdog 4.0.0+, textual-filelink 0.5.0+
+- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.4.0+, watchdog 4.0.0+, textual-filelink 0.6.0+
+- **Architecture:** Two-layer design with CmdorcWidget (embeddable) and CmdorcApp (standalone wrapper)
 
 ## Common Development Commands
 
@@ -34,10 +35,10 @@ pdm run ruff format .
 # Type checking
 pdm run mypy src/
 
-# Run standalone demo
-pdm run python -m textual_cmdorc.simple_app
+# Run standalone TUI
+pdm run cmdorc-tui
 
-# Or use the CLI
+# Or with custom config
 pdm run cmdorc-tui --config=config.toml
 
 # Build for distribution
@@ -61,24 +62,29 @@ Reusable orchestration logic decoupled from any UI framework:
 **Key Principle:** This layer is 100% non-Textual. It can be used in headless scenarios or embedded in other UIs.
 
 ### Layer 2: Textual TUI (`src/textual_cmdorc/`)
-Simple flat list UI:
-- **simple_app.py** - `SimpleApp`: All-in-one TUI shell using FileLinkList + CommandLink widgets
+Two-layer widget architecture for maximum flexibility:
+- **cmdorc_app.py** - Contains both:
+  - `CmdorcWidget`: Composable widget for embedding in multi-panel layouts
+  - `CmdorcApp`: Thin standalone wrapper (adds Header/Footer to CmdorcWidget)
 - **cli.py** - Command-line interface with auto-config generation
 
-**Key Difference from Old Design:** No separate Controller/View split. SimpleApp directly uses OrchestratorAdapter and handles all UI concerns. For advanced embedding, use OrchestratorAdapter directly.
+**Key Design:** CmdorcWidget contains all orchestration logic and can be embedded anywhere. CmdorcApp wraps it for standalone use.
 
 ## Key Design Decisions
 
 ### Flat List Instead of Tree
 Commands appear in TOML order as a simple list (not hierarchical tree):
 - **Simpler mental model** - Command order matches TOML file
-- **Less code** - Reduced from ~2000 lines to ~500 lines
+- **Less code** - Reduced from ~2000 lines to ~750 lines
 - **Easier maintenance** - No tree reconciliation, cycle detection, or duplicate handling
 - **Still functional** - Trigger chains work via cmdorc, tooltips show relationships
 
-### SimpleApp for Standalone, OrchestratorAdapter for Embedding
-- **SimpleApp** - All-in-one TUI shell for standalone use (90% of use cases)
-- **OrchestratorAdapter** - Framework-agnostic backend for headless or custom UI scenarios
+### CmdorcWidget + CmdorcApp Architecture
+- **CmdorcWidget** - Composable widget for embedding (e.g., 3-column layouts)
+- **CmdorcApp** - Standalone wrapper (adds Header/Footer)
+- **OrchestratorAdapter** - Framework-agnostic backend for headless scenarios
+
+This supports both standalone use (90% of cases) and clean embedding in larger TUIs.
 
 ### cmdorc is the Source of Truth
 - All state (running commands, history, trigger chains) lives in `CommandOrchestrator` from cmdorc
@@ -94,7 +100,7 @@ Commands appear in TOML order as a simple list (not hierarchical tree):
 
 ### Startup
 ```
-SimpleApp.__init__(config_path)
+CmdorcApp.__init__(config_path)
   → compose()
     → OrchestratorAdapter.__init__(config_path)
       → load_config() → CommandOrchestrator
@@ -111,7 +117,7 @@ SimpleApp.__init__(config_path)
 ### Command Execution Flow
 ```
 User clicks Play or presses [1]
-  → SimpleApp._start_command(name)
+  → CmdorcApp._start_command(name)
   → adapter.request_run(name)
   → orchestrator.run_command(name)
   → Lifecycle callbacks fire:
@@ -166,7 +172,7 @@ Watchers are loaded by `load_frontend_config()` and managed by `FileWatcherManag
 
 ## Testing Strategy
 
-Current: **59 tests, 29% coverage** (simplified codebase)
+Current: **122 tests, 74% coverage** (simplified codebase)
 
 ### Test Organization
 - **tests/conftest.py** - Fixtures (mock orchestrator, adapter, app)
@@ -192,8 +198,8 @@ pdm run pytest --cov --cov-report=html
 ## Important Files & Their Roles
 
 | File | Purpose | Key Classes |
-|------|---------|-------------|
-| **src/textual_cmdorc/simple_app.py** | Standalone TUI shell | `SimpleApp`, `HelpScreen` |
+| **src/textual_cmdorc/cmdorc_app.py** | Widget + App architecture | `CmdorcWidget`, `CmdorcApp`, `HelpScreen` |
+| **src/textual_cmdorc/cmdorc_app.py** | Standalone TUI shell | `CmdorcApp`, `HelpScreen` |
 | **src/cmdorc_frontend/orchestrator_adapter.py** | Framework-agnostic backend | `OrchestratorAdapter` |
 | **src/cmdorc_frontend/config.py** | Parse TOML, build hierarchy | `load_frontend_config()` |
 | **src/cmdorc_frontend/models.py** | Core dataclasses | `CommandNode`, `TriggerSource`, `KeyboardConfig` |
@@ -208,40 +214,27 @@ pdm run pytest --cov --cov-report=html
 
 ```python
 # Standalone mode
-from textual_cmdorc import SimpleApp
-app = SimpleApp(config_path="config.toml")
+from textual_cmdorc import CmdorcApp
+app = CmdorcApp(config_path="config.toml")
 app.run()
 
-# Embedding SimpleApp in host app
+# Embedding in 3-column layout (new clean approach)
 from textual.app import App, ComposeResult
-from textual_cmdorc import SimpleApp
-class MyApp(App):
+from textual.containers import Horizontal
+from textual_cmdorc import CmdorcWidget
+
+class My3ColumnApp(App):
     def compose(self):
-        self.cmdorc = SimpleApp.__new__(SimpleApp)
-        self.cmdorc.__init__(config_path="config.toml")
-        with Vertical():
-            yield self.cmdorc.file_list  # Just the list widget
-
-    async def on_mount(self):
-        await self.cmdorc.on_mount()
-
-    async def on_unmount(self):
-        await self.cmdorc.on_unmount()
+        with Horizontal():
+            yield LeftPanel()
+            yield CmdorcWidget("config.toml")  # Clean embedding!
+            yield RightPanel()
 
 # Headless command execution (no UI) using OrchestratorAdapter
 from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
 adapter = OrchestratorAdapter(config_path="config.toml")
 loop = asyncio.get_running_loop()
 adapter.attach(loop)
-
-# Wire callbacks
-adapter.on_command_success("Build", lambda h: print("Build passed!"))
-adapter.on_command_failed("Build", lambda h: print("Build failed!"))
-
-# Execute
-await adapter.run_command("Build")
-adapter.detach()
-
 # Sync-safe command execution from UI callbacks
 def on_button_clicked(self):
     self.adapter.request_run("CommandName")  # Safe from UI context
@@ -308,7 +301,7 @@ This project underwent a major simplification (v0.2.0):
 
 ### Removed Features
 - ❌ Hierarchical tree display (now flat list)
-- ❌ CmdorcController + CmdorcView split (now SimpleApp + OrchestratorAdapter)
+- ❌ CmdorcController + CmdorcView split (now CmdorcApp + OrchestratorAdapter)
 - ❌ CmdorcCommandLink wrapper (use textual-filelink's CommandLink directly)
 - ❌ Duplicate command tracking (not needed in flat list)
 - ❌ Phase-based test files (simplified to test_cli.py, test_models.py)
@@ -330,7 +323,7 @@ See **architecture.md** for full design rationale.
 
 - **architecture.md** - Authoritative design reference (simplified v0.2.0)
 - **README.md** - User-facing quickstart and feature overview
-- **EMBEDDING.md** - Embedding guide (may be outdated, refer to SimpleApp docstring)
+- **EMBEDDING.md** - Embedding guide (may be outdated, refer to CmdorcApp docstring)
 - **implementation.md** - Phase-by-phase implementation guide (historical)
 - **plan.md** - Project roadmap (historical)
 - **CHANGELOG.md** - Version history and breaking changes
@@ -338,7 +331,7 @@ See **architecture.md** for full design rationale.
 ## When in Doubt
 
 1. **Architecture questions** → See `architecture.md` (simplified design)
-2. **Standalone usage** → See `SimpleApp` in `simple_app.py`
+2. **Standalone usage** → See `CmdorcApp` and `CmdorcWidget` in `cmdorc_app.py`
 3. **Embedding/headless usage** → See `OrchestratorAdapter` in `orchestrator_adapter.py`
 4. **Config format** → See README.md or sample configs
 5. **Test coverage** → Run `pdm run pytest --cov` to see what's missing
