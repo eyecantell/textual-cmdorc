@@ -329,6 +329,10 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 
 MIT License. See [LICENSE](LICENSE) for details.
 
+## Todo
+Add support for multiple (named) config files
+Add watcher to auto-load the in use config it if changes?
+
 ## Contributing
 
 Contributions welcome! Please:
