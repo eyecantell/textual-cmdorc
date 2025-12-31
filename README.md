@@ -12,7 +12,7 @@ A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmd
 - `CmdorcApp`: Standalone app (wraps CmdorcWidget with Header/Footer)
 - `OrchestratorAdapter`: Framework-agnostic backend for headless/custom UIs
 
-**Current Status:** ✅ Production ready (122 tests, 74% coverage). ~750 lines of code.
+**Current Status:** ✅ Production ready (144 tests, 72% coverage). ~1,050 lines of code.
 
 **Ideal for:** Developer tools, automation monitoring, CI/CD interfaces, or as a widget in larger TUIs.
 
@@ -30,6 +30,10 @@ A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmd
 - 💡 **Smart Tooltips**: Two tooltip systems for maximum clarity
   - **Status icons** (◯/⏳/✅/❌): Show trigger sources, keyboard hints, and last run details
   - **Play/Stop buttons** (▶️/⏹️): Display resolved command preview (e.g., `pytest ./tests -v`)
+- 📊 **Command Details Modal**: Press `[s]` or click settings icon (⚙️) to view comprehensive command info
+  - Status, run history, triggers, output preview, configuration
+  - Keyboard actions: `[o]` open output, `[r]` run, `[c]` copy command, `[e]` edit (coming soon)
+  - Live updates every 2 seconds while modal is open
 - ⌨️ **Global Keyboard Shortcuts**: Configurable hotkeys (1-9, a-z, f1-f12) to run/stop commands
 - 🎯 **Help Screen**: Press `[h]` to see all keyboard shortcuts
 - 🔄 **Live Reload**: Press `[r]` to reload configuration without restarting
@@ -316,9 +320,10 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 - ✅ Keyboard shortcuts (configurable, conflict detection)
 - ✅ File watchers (watchdog integration)
 - ✅ Help screen (modal with shortcuts)
+- ✅ Command details modal (comprehensive command information)
 - ✅ Config reload (live without restart)
 - ✅ CLI with auto-config generation
-- ✅ 122 passing tests (74% coverage)
+- ✅ 144 passing tests (72% coverage)
 
 ### Known Limitations
 - No log pane (use terminal output instead)
@@ -330,8 +335,8 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 MIT License. See [LICENSE](LICENSE) for details.
 
 ## Todo
-Add support for multiple (named) config files
-Add watcher to auto-load the in use config it if changes?
+- Add support for multiple (named) config files
+- Add watcher to auto-load the in use config if it changes?
 
 ## Contributing
 

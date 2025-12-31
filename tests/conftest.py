@@ -28,6 +28,14 @@ class CommandConfig:
         self.name = name
         self.command = command
         self.triggers = triggers or []
+        self.cancel_on_triggers = []
+        self.keep_in_memory = 3
+        self.timeout_secs = None
+        self.max_concurrent = 1
+        self.debounce_in_ms = 0
+        self.on_retrigger = "cancel_and_restart"
+        self.cwd = None
+        self.debounce_mode = "start"
 
 
 class RunResult:

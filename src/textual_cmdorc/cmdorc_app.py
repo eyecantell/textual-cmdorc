@@ -29,6 +29,7 @@ from textual_filelink import CommandLink, FileLinkList, sanitize_id
 
 from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
 
+from .details_screen import CommandDetailsScreen
 from .tooltip_builders import TooltipBuilder
 
 # Logger for warnings and errors
@@ -288,6 +289,31 @@ class CmdorcWidget(Widget):
             # Start idle command
             await self._start_command(cmd_name)
 
+    async def action_show_details(self) -> None:
+        """Show details modal for focused command."""
+        try:
+            focused = self.app.focused if self.app else None
+            if not focused:
+                return
+
+            # CommandLink or its children can be focused
+            if isinstance(focused, CommandLink):
+                cmd_name = focused.command_name
+            elif hasattr(focused, "parent") and isinstance(focused.parent, CommandLink):
+                cmd_name = focused.parent.command_name
+            else:
+                return  # No CommandLink focused
+
+            if self.app:
+                screen = CommandDetailsScreen(
+                    cmd_name=cmd_name,
+                    adapter=self.adapter,
+                )
+                self.app.push_screen(screen)
+
+        except Exception as e:
+            logger.error(f"Failed to show details: {e}")
+
     async def _start_command(self, cmd_name: str) -> None:
         """Start command execution.
 
@@ -360,14 +386,18 @@ class CmdorcWidget(Widget):
         asyncio.create_task(self._stop_command(event.name))
 
     def on_command_link_settings_clicked(self, event: CommandLink.SettingsClicked) -> None:
-        """Handle settings icon clicks (placeholder).
+        """Handle settings icon clicks - show details modal.
 
         Args:
             event: CommandLink.SettingsClicked message
         """
         logger.debug(f"Settings clicked: {event.name}")
         if self.app:
-            self.app.notify(f"Settings for {event.name} (coming soon)")
+            screen = CommandDetailsScreen(
+                cmd_name=event.name,
+                adapter=self.adapter,
+            )
+            self.app.push_screen(screen)
 
     # ========================================================================
     # Lifecycle Callbacks (from OrchestratorAdapter)

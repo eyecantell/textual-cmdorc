@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Status:** Production ready
 - **Python:** 3.10+
-- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.4.0+, watchdog 4.0.0+, textual-filelink 0.6.0+
+- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.8.0+, watchdog 4.0.0+, textual-filelink 0.8.0+
 - **Architecture:** Two-layer design with CmdorcWidget (embeddable) and CmdorcApp (standalone wrapper)
 
 ## Common Development Commands
@@ -67,6 +67,8 @@ Two-layer widget architecture for maximum flexibility:
   - `CmdorcWidget`: Composable widget for embedding in multi-panel layouts
   - `CmdorcApp`: Thin standalone wrapper (adds Header/Footer to CmdorcWidget)
 - **cli.py** - Command-line interface with auto-config generation
+- **tooltip_builders.py** - `TooltipBuilder`: Constructs all tooltip content (status, play/stop, output)
+- **formatting.py** - Pure utility functions for time formatting, ANSI stripping, output preview
 
 **Key Design:** CmdorcWidget contains all orchestration logic and can be embedded anywhere. CmdorcApp wraps it for standalone use.
 
@@ -172,12 +174,16 @@ Watchers are loaded by `load_frontend_config()` and managed by `FileWatcherManag
 
 ## Testing Strategy
 
-Current: **122 tests, 74% coverage** (simplified codebase)
+Current: **144 tests, 72% coverage** (includes command details modal)
 
 ### Test Organization
 - **tests/conftest.py** - Fixtures (mock orchestrator, adapter, app)
 - **tests/test_cli.py** - CLI argument parsing and config generation
+- **tests/test_cmdorc_app.py** - CmdorcWidget lifecycle and callbacks
+- **tests/test_details_screen.py** - CommandDetailsScreen content builders and actions
+- **tests/test_formatting.py** - Formatting utilities (time, output preview, ANSI)
 - **tests/test_models.py** - Config parsing, TriggerSource, KeyboardConfig
+- **tests/test_tooltip_builders.py** - Tooltip content builders
 
 ### Running Tests
 ```bash
@@ -199,12 +205,15 @@ pdm run pytest --cov --cov-report=html
 
 | File | Purpose | Key Classes |
 | **src/textual_cmdorc/cmdorc_app.py** | Widget + App architecture | `CmdorcWidget`, `CmdorcApp`, `HelpScreen` |
-| **src/textual_cmdorc/cmdorc_app.py** | Standalone TUI shell | `CmdorcApp`, `HelpScreen` |
+| **src/textual_cmdorc/details_screen.py** | Command details modal | `CommandDetailsScreen` |
+| **src/textual_cmdorc/tooltip_builders.py** | Tooltip content builders | `TooltipBuilder` |
+| **src/textual_cmdorc/formatting.py** | Formatting utilities | `format_elapsed_time()`, `get_output_preview()` |
 | **src/cmdorc_frontend/orchestrator_adapter.py** | Framework-agnostic backend | `OrchestratorAdapter` |
 | **src/cmdorc_frontend/config.py** | Parse TOML, build hierarchy | `load_frontend_config()` |
 | **src/cmdorc_frontend/models.py** | Core dataclasses | `CommandNode`, `TriggerSource`, `KeyboardConfig` |
 | **src/cmdorc_frontend/file_watcher.py** | Watchdog integration | `FileWatcherManager` |
 | **src/textual_cmdorc/cli.py** | Command-line interface | `main()`, `create_default_config()` |
+| **tests/test_details_screen.py** | Details modal tests | 20 tests, 71% coverage |
 | **architecture.md** | Full design reference | Simplified design decisions |
 | **README.md** | User-facing quickstart | Features, API, examples |
 
@@ -278,9 +287,9 @@ from textual_cmdorc import CmdorcController  # Doesn't exist anymore!
 
 ## External Dependencies
 
-- **cmdorc** (0.3.0+) - Core orchestration engine (source of truth for state)
+- **cmdorc** (0.8.0+) - Core orchestration engine (source of truth for state)
 - **textual** (6.6.0+) - TUI framework (App, widgets, styling)
-- **textual-filelink** (0.5.0+) - CommandLink widget with play/stop/settings buttons and tooltip support
+- **textual-filelink** (0.8.0+) - CommandLink widget with play/stop/settings buttons and tooltip support
 - **watchdog** (4.0.0+) - File system event monitoring
 
 ## Key Gotchas
