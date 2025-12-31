@@ -5,7 +5,7 @@
 groups = ["default", "dev", "lint", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:e70d67664aba1c742d9f438a18ab3db931b3e1714b3da3b691040cc36f81d567"
+content_hash = "sha256:1e926c574674f05b20683496926db3523880954be38baa54a145ee306b3ba320"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -224,7 +224,7 @@ files = [
 
 [[package]]
 name = "cmdorc"
-version = "0.6.0"
+version = "0.8.0"
 requires_python = ">=3.10"
 summary = "Async-first, trigger-driven shell command orchestrator for TUIs and agents"
 groups = ["default"]
@@ -232,8 +232,8 @@ dependencies = [
     "tomli>=2.3.0; python_version < \"3.11\"",
 ]
 files = [
-    {file = "cmdorc-0.6.0-py3-none-any.whl", hash = "sha256:1efef64081a9c2833e5d779f0e3bcfb043ce31d655ad929fabccf5dbc6ed21a0"},
-    {file = "cmdorc-0.6.0.tar.gz", hash = "sha256:ef6e6a462476a66e8f64817354ea8dae606a2171d29c30238e5af03a92e98d51"},
+    {file = "cmdorc-0.8.0-py3-none-any.whl", hash = "sha256:2283df488471a301a0999ae38722579198948559e8326be9ee82e03fdde4a915"},
+    {file = "cmdorc-0.8.0.tar.gz", hash = "sha256:542d57b70be35ae2d18852a5ad96069cd3069bd9e0bad2c84df63dcbd316d072"},
 ]
 
 [[package]]
