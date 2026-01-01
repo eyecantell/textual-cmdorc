@@ -335,7 +335,9 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 MIT License. See [LICENSE](LICENSE) for details.
 
 ## Todo
-- Add support for multiple (named) config files
+- Fix filelink for completed commands (points to wrong output file) - sorting issue in cmdorc
+- Test file watchers
+- Add support for multiple (named) config files, also fix reload
 - Add watcher to auto-load the in use config if it changes?
 
 ## Contributing

@@ -16,7 +16,7 @@
             "type": "bind"
         }
     ],
-    "postCreateCommand": "cd /mounted/dev/textual-cmdorc && pdm install -G test",
+    "postCreateCommand": "mkdir -p ~/.claude && ln -sf /mounted/dev/claude_settings/settings.json ~/.claude/settings.json && cd /mounted/dev/textual-cmdorc && pdm install -G test -G dev",
     "customizations": {
         "vscode": {
             "extensions": [
@@ -30,5 +30,8 @@
                 "python.pythonPath": "/usr/local/bin/python"
             }
         }
+    },
+    "remoteEnv": {
+        "ENABLE_LSP_TOOL": "1"
     }
 }
