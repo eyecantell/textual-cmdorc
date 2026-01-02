@@ -113,6 +113,24 @@ class TestParseArgs:
                 parse_args()
             assert exc_info.value.code == 0
 
+    def test_parse_args_verbose_flag(self):
+        """Test --verbose flag."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "--verbose"]):
+            args = parse_args()
+            assert args.verbose is True
+
+    def test_parse_args_verbose_short_flag(self):
+        """Test -v flag."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "-v"]):
+            args = parse_args()
+            assert args.verbose is True
+
+    def test_parse_args_no_verbose_flag(self):
+        """Test default (no verbose flag)."""
+        with patch.object(sys, "argv", ["cmdorc-tui"]):
+            args = parse_args()
+            assert args.verbose is False
+
 
 class TestMain:
     """Tests for main function."""

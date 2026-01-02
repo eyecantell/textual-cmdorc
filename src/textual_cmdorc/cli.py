@@ -8,7 +8,14 @@ from pathlib import Path
 from textual_cmdorc import __version__
 from textual_cmdorc.cmdorc_app import CmdorcApp
 
+# Configure logging with a handler to actually output messages
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s:%(message)s",
+)
+# Enable debug for our packages (will show file watcher activity)
 logging.getLogger("textual_cmdorc").setLevel(logging.DEBUG)
+logging.getLogger("cmdorc_frontend").setLevel(logging.DEBUG)
 
 # Default config template for Python development workflows
 DEFAULT_CONFIG_TEMPLATE = """\
@@ -103,6 +110,13 @@ def parse_args() -> argparse.Namespace:
         version=f"%(prog)s {__version__}",
     )
 
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging (shows file watcher activity)",
+    )
+
     return parser.parse_args()
 
 
@@ -117,6 +131,11 @@ def main() -> None:
     - Error handling and exit codes
     """
     args = parse_args()
+
+    # Configure logging level based on --verbose flag
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.getLogger("textual_cmdorc").setLevel(log_level)
+    logging.getLogger("cmdorc_frontend").setLevel(log_level)
 
     # Resolve config path to absolute path
     config_path = Path(args.config).resolve()

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Output file links now update correctly** - Fixed bug where clicking command names wouldn't open the latest output file
+  - Previously, when a command ran multiple times, the clickable link would remain stuck on the first output file
+  - Now correctly updates to point to the new output file after each run
+  - Requires textual-filelink >= 0.8.1 which added the `FileLink.set_path()` method
+- **File watcher logging now visible** - Added `logging.basicConfig()` and cmdorc_frontend logger configuration
+  - File watcher startup and trigger events now appear in terminal output
+  - Fixed missing log handler that prevented all file watcher messages from appearing
+- **ignore_dirs now respected** - File watchers properly filter `__pycache__`, `.git`, `venv`, `.venv`, etc.
+  - Previously configured but not implemented - now actually filters ignored directories
+
+### Added
+- **--verbose flag** - Control logging verbosity for debugging (`-v` or `--verbose`)
+  - Normal mode (default): Shows INFO level logs (startup, errors)
+  - Verbose mode: Shows DEBUG level logs (every file change event)
+
 ### Changed
 - **Updated cmdorc dependency to 0.8.1+** - Required for correct history ordering
   - Removed `reversed()` calls in tooltip_builders.py and details_screen.py

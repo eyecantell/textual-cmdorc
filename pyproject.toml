@@ -39,11 +39,12 @@ dependencies = [
     "textual>=6.6.0",
     "cmdorc>=0.8.1",
     "watchdog>=4.0.0",
-    "textual-filelink>=0.8.0",
+    "textual-filelink>=0.8.1",
 ]
 
 [project.scripts]
 cmdorc-tui = "textual_cmdorc.cli:main"
+textual-cmdorc = "textual_cmdorc.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/eyecantell/textual-cmdorc"
@@ -97,6 +98,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["T20"]  # Allow print statements in tests
+"tests/test_filelink_integration.py" = ["E402"]  # Module-level imports not at top (required for unmocking)
 
 [tool.pytest.ini_options]
 addopts = [

@@ -187,6 +187,50 @@ ignore_dirs = ["__pycache__", ".git"]
 
 Run `cmdorc-tui` without a config file to auto-generate a starter config.
 
+## Debugging File Watchers
+
+If file watchers aren't triggering commands automatically, use these debugging steps:
+
+### View File Watcher Activity
+
+```bash
+# Normal mode (shows startup and errors)
+cmdorc-tui
+
+# Verbose mode (shows every file change event)
+cmdorc-tui --verbose
+
+# Or use short flag
+cmdorc-tui -v
+```
+
+### Common Issues
+
+**File watchers not starting:**
+- Verify `watchdog` is installed: `pip list | grep watchdog`
+- Check that watch directory exists in your config
+- Run with `--verbose` to see startup errors
+
+**Commands not triggering on file changes:**
+- Verify trigger name matches between `[[file_watcher]]` and `[[command]]` sections
+- Check pattern syntax: use `**/*.py` for all Python files at any depth
+- Ensure file changes aren't in ignored directories (`__pycache__`, `.git`, etc.)
+- Use `--verbose` to see if file changes are detected
+
+### Using Textual Console for Detailed Logs
+
+For even more detailed debugging, use Textual's console in a separate terminal:
+
+```bash
+# Terminal 1: Start textual console
+textual console
+
+# Terminal 2: Run cmdorc-tui
+cmdorc-tui --verbose
+```
+
+All logs will appear in the console terminal, including file system events and trigger chains.
+
 ## Architecture
 
 ### CmdorcWidget (Composable Widget)
@@ -333,7 +377,6 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 MIT License. See [LICENSE](LICENSE) for details.
 
 ## Todo
-- Fix filelink for completed commands (points to wrong output file) - sorting issue in cmdorc
 - Test file watchers
 - Add support for multiple (named) config files, also fix reload
 - Add watcher to auto-load the in use config if it changes?

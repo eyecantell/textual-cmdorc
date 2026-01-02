@@ -25,6 +25,7 @@ class _DebouncedHandler(FileSystemEventHandler):
         debounce_ms: int,
         patterns: list[str] | None = None,
         extensions: list[str] | None = None,
+        ignore_dirs: list[str] | None = None,
     ):
         """Initialize handler.
 
@@ -35,6 +36,7 @@ class _DebouncedHandler(FileSystemEventHandler):
             debounce_ms: Debounce delay in milliseconds
             patterns: Optional glob patterns to match
             extensions: Optional extensions to match
+            ignore_dirs: Optional directory names to ignore
         """
         self.trigger_name = trigger_name
         self.orchestrator = orchestrator
@@ -42,6 +44,7 @@ class _DebouncedHandler(FileSystemEventHandler):
         self.debounce_ms = debounce_ms
         self.patterns = patterns
         self.extensions = extensions
+        self.ignore_dirs = ignore_dirs or []
         self._timer: Timer | None = None
 
     def _matches_filters(self, path: Path) -> bool:
@@ -53,6 +56,12 @@ class _DebouncedHandler(FileSystemEventHandler):
         Returns:
             True if path matches filters
         """
+        # Check if path is in ignored directory
+        if self.ignore_dirs:
+            for part in path.parts:
+                if part in self.ignore_dirs:
+                    return False
+
         # Check extensions if specified
         if self.extensions and path.suffix not in self.extensions:
             return False
@@ -150,6 +159,7 @@ class FileWatcherManager:
             debounce_ms=config.debounce_ms,
             patterns=config.patterns,
             extensions=config.extensions,
+            ignore_dirs=config.ignore_dirs,
         )
 
         # Schedule watch

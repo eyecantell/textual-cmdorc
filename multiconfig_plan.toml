@@ -1,0 +1,339 @@
+Perfect! This is a much cleaner MVP scope. Let me outline the streamlined design:
+
+## Streamlined Multi-Config Design
+
+### Core Principle
+**File-first configuration** - All multi-config setup happens in `configs.toml`. The TUI just loads and displays what's defined there.
+
+### What We Build (MVP)
+
+#### 1. **configs.toml Support**
+```toml
+# configs.toml
+[[config]]
+name = "Development"
+path = "./config.toml"
+includes = ["./build.toml", "./test.toml"]
+
+[[config]]
+name = "Build Only"
+path = "./build.toml"
+
+[[config]]
+name = "Testing"
+path = "./test.toml"
+
+[settings]
+default = "Development"
+```
+
+#### 2. **Config Switcher UI**
+```
+┌─────────────────────────────────────────────┐
+│ Active: Development [Switch ▼]             │
+├─────────────────────────────────────────────┤
+│ ━━━━ config.toml ━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ [1] ○ ▶️ Watch                              │
+│                                              │
+│ ━━━━ build.toml ━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ [2] ○ ▶️ Build Dev                          │
+│ [3] ○ ▶️ Build Prod                         │
+│                                              │
+│ ━━━━ test.toml ━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ [4] ○ ▶️ Unit Tests                         │
+│ [5] ○ ▶️ Integration Tests                  │
+└─────────────────────────────────────────────┘
+```
+
+Quick switch dropdown:
+```
+┌─────────────────────────────────────┐
+│ ● Development (5 commands)          │
+│ ○ Build Only (2 commands)           │
+│ ○ Testing (3 commands)              │
+└─────────────────────────────────────┘
+```
+
+#### 3. **Startup Flow**
+
+```
+Check for configs.toml
+├─ Exists?
+│  ├─ Valid? → Load it
+│  │  ├─ Has default? → Load default config
+│  │  ├─ Has saved active in settings? → Load that
+│  │  └─ Multiple configs, no default → Load first one
+│  └─ Invalid? → Show error, offer to recreate
+│
+└─ Doesn't exist?
+   ├─ Found config.toml in cwd? → Load it (backward compat)
+   └─ No config.toml? → Offer to create starter
+      └─ "Create config.toml or configs.toml?"
+```
+
+#### 4. **Initial Setup Prompt**
+
+When no configs found:
+```
+┌─────────────────────────────────────────────┐
+│  Welcome to textual-cmdorc!                 │
+├─────────────────────────────────────────────┤
+│  No configuration found.                    │
+│                                              │
+│  What would you like to create?             │
+│                                              │
+│  [1] config.toml                            │
+│      Simple single-file setup               │
+│                                              │
+│  [2] configs.toml                           │
+│      Multi-config setup (advanced)          │
+│                                              │
+│  [3] Exit                                   │
+│                                              │
+│                    [1] [2] [3]              │
+└─────────────────────────────────────────────┘
+```
+
+**Option 1: Creates `config.toml`**
+```toml
+# Starter config.toml
+[[command]]
+name = "Hello"
+command = "echo 'Hello from cmdorc!'"
+
+[[command]]
+name = "Date"
+command = "date"
+```
+
+**Option 2: Creates `configs.toml` + `config.toml`**
+```toml
+# configs.toml
+[[config]]
+name = "Main Config"
+path = "./config.toml"
+
+[settings]
+default = "Main Config"
+```
+
+Plus the same starter `config.toml`
+
+### What We DON'T Build (MVP)
+
+❌ Config discovery/scanning UI  
+❌ Directory tree picker  
+❌ File watcher for adding configs  
+❌ In-TUI config editor  
+❌ Config validation modal  
+❌ "Add config" buttons  
+
+### User Workflow
+
+#### Scenario 1: New User (Single Config)
+```bash
+$ cmdorc-tui
+> No config found. Create config.toml? [Y/n]
+> Created config.toml with example commands.
+# TUI opens with config.toml loaded
+```
+
+#### Scenario 2: New User (Multi-Config)
+```bash
+$ cmdorc-tui
+> No config found. Create:
+>   [1] config.toml (simple)
+>   [2] configs.toml (advanced)
+> Choice: 2
+> Created configs.toml and config.toml
+# TUI opens with Main Config loaded
+```
+
+#### Scenario 3: User Wants Multiple Configs
+```bash
+# User manually creates files
+$ touch build.toml test.toml deploy.toml
+
+# User edits configs.toml
+$ nano configs.toml
+
+[[config]]
+name = "Development"
+path = "./config.toml"
+includes = ["./build.toml", "./test.toml"]
+
+[[config]]
+name = "Deployment"
+path = "./deploy.toml"
+
+[settings]
+default = "Development"
+
+# Start TUI
+$ cmdorc-tui
+# TUI opens with Development config loaded (default)
+# User can switch to Deployment via dropdown
+```
+
+#### Scenario 4: Config Error Handling
+```bash
+$ cmdorc-tui
+> Error loading configs.toml:
+>   - build.toml not found (referenced in "Development")
+> 
+> Edit configs.toml to fix, or press [R] to recreate starter.
+```
+
+### CLI Enhancements
+
+```bash
+# Use specific config from configs.toml (by name)
+cmdorc-tui --config "Development"
+
+# Show available configs (from configs.toml)
+cmdorc-tui --list-configs
+# Output:
+# Available configs (from configs.toml):
+#   - Development (config.toml + build.toml + test.toml) [default]
+#   - Build Only (build.toml)
+#   - Testing (test.toml)
+
+# Validate configs.toml
+cmdorc-tui --validate
+# Output:
+# ✓ configs.toml is valid
+# ✓ Development
+#   - config.toml ✓
+#   - build.toml ✓
+#   - test.toml ✓
+# ✓ Build Only
+#   - build.toml ✓
+
+# Create starter configs.toml (with any found .toml files)
+cmdorc-tui --init-configs
+# Output:
+# Found 3 .toml files:
+#   - config.toml
+#   - build.toml
+#   - test.toml
+# 
+# Created configs.toml with:
+#   - "All Configs" (includes all 3)
+#   - "Main Config" (config.toml only)
+#   - "Build Only" (build.toml only)
+#   - "Testing" (test.toml only)
+```
+
+### Settings JSON (Minimal)
+
+```json
+{
+  "version": "1.0",
+  "active_config_name": "Development",
+  "configs_toml_path": "./configs.toml"
+}
+```
+
+Just tracks which config is currently active. Everything else is in `configs.toml`.
+
+### Documentation Strategy
+
+**README.md section:**
+```markdown
+## Using Multiple Configs
+
+textual-cmdorc supports multiple configurations via `configs.toml`:
+
+1. Create individual config files for different purposes:
+   - `build.toml` - Build commands
+   - `test.toml` - Test commands
+   - `deploy.toml` - Deployment commands
+
+2. Create `configs.toml` to define how they're used:
+
+```toml
+[[config]]
+name = "Development"
+includes = ["./build.toml", "./test.toml"]
+
+[[config]]
+name = "CI Pipeline"
+includes = ["./build.toml", "./test.toml", "./coverage.toml"]
+
+[[config]]
+name = "Production Deploy"
+path = "./deploy.toml"
+
+[settings]
+default = "Development"
+```
+
+3. Switch between configs in the TUI using the dropdown or `Ctrl+K`
+
+See [examples/multi-config/](examples/multi-config/) for complete examples.
+```
+
+### Examples Directory Structure
+
+```
+examples/
+├── single-config/
+│   ├── config.toml
+│   └── README.md
+└── multi-config/
+    ├── configs.toml
+    ├── config.toml
+    ├── build.toml
+    ├── test.toml
+    ├── deploy.toml
+    └── README.md
+```
+
+### Implementation Checklist
+
+**Phase 1: Core Loading (Week 1)**
+- [ ] Parse configs.toml
+- [ ] Resolve includes
+- [ ] Handle circular includes error
+- [ ] Handle duplicate command names error
+- [ ] Load multi-config into orchestrator
+- [ ] Unit tests for loading logic
+
+**Phase 2: UI (Week 2)**
+- [ ] Config switcher dropdown
+- [ ] File separator widgets
+- [ ] Update command list rendering
+- [ ] Keyboard shortcut for quick switch (Ctrl+K)
+- [ ] Save active config to settings.json
+
+**Phase 3: Startup & Errors (Week 3)**
+- [ ] Detect configs.toml vs config.toml
+- [ ] Initial setup prompt (create config.toml vs configs.toml)
+- [ ] Validation on startup
+- [ ] Error messages for missing/invalid configs
+- [ ] CLI flags (--config, --list-configs, --validate, --init-configs)
+
+**Phase 4: Polish (Week 4)**
+- [ ] Example configs in repo
+- [ ] Documentation
+- [ ] Integration tests
+- [ ] Migration guide for existing users
+
+### Benefits of This Approach
+
+✅ **Minimal Scope**: No complex UI for config management  
+✅ **Power User Friendly**: File-based is what developers want  
+✅ **Clear Upgrade Path**: Easy to add UI tools later if needed  
+✅ **Testable**: File-based config is easy to test  
+✅ **Flexible**: Users can script/generate configs.toml  
+✅ **Version Control**: Everything in files, easy to track  
+
+### Future Enhancements (Post-MVP)
+
+When users ask for it:
+- Config editor TUI (for those who want it)
+- Config discovery/scan UI
+- Visual config composer
+- Config templates library
+
+But for MVP, **file-first is perfect**.
