@@ -12,8 +12,6 @@ A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmd
 - `CmdorcApp`: Standalone app (wraps CmdorcWidget with Header/Footer)
 - `OrchestratorAdapter`: Framework-agnostic backend for headless/custom UIs
 
-**Current Status:** ✅ Production ready (144 tests, 72% coverage). ~1,050 lines of code.
-
 **Ideal for:** Developer tools, automation monitoring, CI/CD interfaces, or as a widget in larger TUIs.
 
 ## Features

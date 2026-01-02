@@ -5,6 +5,14 @@ All notable changes to textual-cmdorc are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Updated cmdorc dependency to 0.8.1+** - Required for correct history ordering
+  - Removed `reversed()` calls in tooltip_builders.py and details_screen.py
+  - History now displays in correct chronological order (most recent first)
+  - Fixed bug in state_manager.py where `history[0]` previously returned oldest run instead of most recent
+
 ## [0.1.0] - 2024-12-17
 
 ### Added

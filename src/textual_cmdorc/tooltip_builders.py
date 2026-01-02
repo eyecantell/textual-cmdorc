@@ -57,13 +57,13 @@ class TooltipBuilder:
             history = self.adapter.orchestrator.get_history(cmd_name, limit=3)
 
             if history and len(history) > 0:
-                # Show historical runs
+                # Show historical runs (already in reverse chronological order from cmdorc 0.8.1+)
                 if len(history) > 1:
                     lines.append("Last 3 runs:")
                 else:
                     lines.append("Last run:")
 
-                for result in reversed(history):
+                for result in history:
                     # Status icon
                     icon = {
                         "SUCCESS": "✅",
@@ -148,9 +148,9 @@ class TooltipBuilder:
             history = self.adapter.orchestrator.get_history(cmd_name, limit=3)
 
             if history and len(history) > 1:
-                # Show last 3 runs
+                # Show last 3 runs (already in reverse chronological order from cmdorc 0.8.1+)
                 lines.append("Last 3 runs:")
-                for result in reversed(history):
+                for result in history:
                     # Status icon
                     icon = {
                         "SUCCESS": "✅",

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Status:** Production ready
 - **Python:** 3.10+
-- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.8.0+, watchdog 4.0.0+, textual-filelink 0.8.0+
+- **Core Dependencies:** Textual 6.6.0+, cmdorc 0.8.1+, watchdog 4.0.0+, textual-filelink 0.8.0+
 - **Architecture:** Two-layer design with CmdorcWidget (embeddable) and CmdorcApp (standalone wrapper)
 
 ## Common Development Commands
@@ -287,7 +287,8 @@ from textual_cmdorc import CmdorcController  # Doesn't exist anymore!
 
 ## External Dependencies
 
-- **cmdorc** (0.8.0+) - Core orchestration engine (source of truth for state)
+- **cmdorc** (0.8.1+) - Core orchestration engine (source of truth for state)
+  - 0.8.1+ required for correct history ordering (most recent first)
 - **textual** (6.6.0+) - TUI framework (App, widgets, styling)
 - **textual-filelink** (0.8.0+) - CommandLink widget with play/stop/settings buttons and tooltip support
 - **watchdog** (4.0.0+) - File system event monitoring

@@ -366,8 +366,8 @@ class CommandDetailsScreen(ModalScreen):
                 lines.append("No runs recorded")
                 return "\n".join(lines)
 
-            # Format each run
-            for result in reversed(history):
+            # Format each run (already in reverse chronological order from cmdorc 0.8.1+)
+            for result in history:
                 icon = {"SUCCESS": "✅", "FAILED": "❌", "CANCELLED": "⚠️"}.get(result.state.name, "◯")
                 time_ago = result.time_ago_str or "?"
                 duration = result.duration_str or "?"

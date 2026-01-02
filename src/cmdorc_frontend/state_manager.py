@@ -75,10 +75,10 @@ class StateReconciler:
                     comment = getattr(handle, "comment", "Running")
                     view.set_running(True, f"Running: {comment}")
             else:
-                # Check history for last result
+                # Check history for last result (cmdorc 0.8.1+ returns most recent first)
                 history = self.orchestrator.get_history(view.command_name, limit=1)
                 if history:
-                    result = history[0]
+                    result = history[0]  # Most recent run
                     icon = self._map_state_icon(result.state)
                     duration = getattr(result, "duration_str", "?")
                     tooltip = f"{result.state.value} ({duration})"
