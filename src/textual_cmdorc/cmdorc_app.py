@@ -200,6 +200,7 @@ class CmdorcWidget(Widget):
                             show_timer=True,
                             show_settings=True,
                             tooltip=self.tooltip_builder.build_output_tooltip(cmd_name),
+                            timer_field_width=8,
                         )
                         # Set play/stop button tooltips
                         link.set_play_stop_tooltips(
@@ -218,6 +219,7 @@ class CmdorcWidget(Widget):
                             initial_status_tooltip=f"Config error: {e}",
                             show_settings=False,
                             tooltip=f"Error: {e}",
+                            timer_field_width=8,
                         )
                         self.file_list.add_item(link)
 
@@ -598,6 +600,7 @@ class CmdorcWidget(Widget):
                         show_timer=True,
                         show_settings=True,
                         tooltip=self.tooltip_builder.build_output_tooltip(cmd_name),
+                        timer_field_width=8,
                     )
                     link.set_play_stop_tooltips(
                         run_tooltip=self.tooltip_builder.build_play_tooltip(cmd_name),
@@ -614,6 +617,7 @@ class CmdorcWidget(Widget):
                         initial_status_tooltip=f"Config error: {e}",
                         show_settings=False,
                         tooltip=f"Error: {e}",
+                        timer_field_width=8,
                     )
                     self.file_list.add_item(link)
 

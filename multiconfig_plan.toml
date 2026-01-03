@@ -1,15 +1,13 @@
-Perfect! This is a much cleaner MVP scope. Let me outline the streamlined design:
-
 ## Streamlined Multi-Config Design
 
 ### Core Principle
-**File-first configuration** - All multi-config setup happens in `configs.toml`. The TUI just loads and displays what's defined there.
+**File-first configuration** - All multi-config setup happens in `cmdorc.toml`. The TUI just loads and displays what's defined there.
 
 ### What We Build (MVP)
 
-#### 1. **configs.toml Support**
+#### 1. **cmdorc.toml Support**
 ```toml
-# configs.toml
+# cmdorc.toml
 [[config]]
 name = "Development"
 path = "./config.toml"
@@ -57,7 +55,7 @@ Quick switch dropdown:
 #### 3. **Startup Flow**
 
 ```
-Check for configs.toml
+Check for cmdorc.toml
 ├─ Exists?
 │  ├─ Valid? → Load it
 │  │  ├─ Has default? → Load default config
@@ -68,7 +66,7 @@ Check for configs.toml
 └─ Doesn't exist?
    ├─ Found config.toml in cwd? → Load it (backward compat)
    └─ No config.toml? → Offer to create starter
-      └─ "Create config.toml or configs.toml?"
+      └─ "Create config.toml or cmdorc.toml?"
 ```
 
 #### 4. **Initial Setup Prompt**
@@ -85,7 +83,7 @@ When no configs found:
 │  [1] config.toml                            │
 │      Simple single-file setup               │
 │                                              │
-│  [2] configs.toml                           │
+│  [2] cmdorc.toml                           │
 │      Multi-config setup (advanced)          │
 │                                              │
 │  [3] Exit                                   │
@@ -106,9 +104,9 @@ name = "Date"
 command = "date"
 ```
 
-**Option 2: Creates `configs.toml` + `config.toml`**
+**Option 2: Creates `cmdorc.toml` + `config.toml`**
 ```toml
-# configs.toml
+# cmdorc.toml
 [[config]]
 name = "Main Config"
 path = "./config.toml"
@@ -143,9 +141,9 @@ $ cmdorc-tui
 $ cmdorc-tui
 > No config found. Create:
 >   [1] config.toml (simple)
->   [2] configs.toml (advanced)
+>   [2] cmdorc.toml (advanced)
 > Choice: 2
-> Created configs.toml and config.toml
+> Created cmdorc.toml and config.toml
 # TUI opens with Main Config loaded
 ```
 
@@ -154,8 +152,8 @@ $ cmdorc-tui
 # User manually creates files
 $ touch build.toml test.toml deploy.toml
 
-# User edits configs.toml
-$ nano configs.toml
+# User edits cmdorc.toml
+$ nano cmdorc.toml
 
 [[config]]
 name = "Development"
@@ -178,30 +176,30 @@ $ cmdorc-tui
 #### Scenario 4: Config Error Handling
 ```bash
 $ cmdorc-tui
-> Error loading configs.toml:
+> Error loading cmdorc.toml:
 >   - build.toml not found (referenced in "Development")
 > 
-> Edit configs.toml to fix, or press [R] to recreate starter.
+> Edit cmdorc.toml to fix, or press [R] to recreate starter.
 ```
 
 ### CLI Enhancements
 
 ```bash
-# Use specific config from configs.toml (by name)
+# Use specific config from cmdorc.toml (by name)
 cmdorc-tui --config "Development"
 
-# Show available configs (from configs.toml)
+# Show available configs (from cmdorc.toml)
 cmdorc-tui --list-configs
 # Output:
-# Available configs (from configs.toml):
+# Available configs (from cmdorc.toml):
 #   - Development (config.toml + build.toml + test.toml) [default]
 #   - Build Only (build.toml)
 #   - Testing (test.toml)
 
-# Validate configs.toml
+# Validate cmdorc.toml
 cmdorc-tui --validate
 # Output:
-# ✓ configs.toml is valid
+# ✓ cmdorc.toml is valid
 # ✓ Development
 #   - config.toml ✓
 #   - build.toml ✓
@@ -209,7 +207,7 @@ cmdorc-tui --validate
 # ✓ Build Only
 #   - build.toml ✓
 
-# Create starter configs.toml (with any found .toml files)
+# Create starter cmdorc.toml (with any found .toml files)
 cmdorc-tui --init-configs
 # Output:
 # Found 3 .toml files:
@@ -217,7 +215,7 @@ cmdorc-tui --init-configs
 #   - build.toml
 #   - test.toml
 # 
-# Created configs.toml with:
+# Created cmdorc.toml with:
 #   - "All Configs" (includes all 3)
 #   - "Main Config" (config.toml only)
 #   - "Build Only" (build.toml only)
@@ -230,11 +228,11 @@ cmdorc-tui --init-configs
 {
   "version": "1.0",
   "active_config_name": "Development",
-  "configs_toml_path": "./configs.toml"
+  "configs_toml_path": "./cmdorc.toml"
 }
 ```
 
-Just tracks which config is currently active. Everything else is in `configs.toml`.
+Just tracks which config is currently active. Everything else is in `cmdorc.toml`.
 
 ### Documentation Strategy
 
@@ -242,14 +240,14 @@ Just tracks which config is currently active. Everything else is in `configs.tom
 ```markdown
 ## Using Multiple Configs
 
-textual-cmdorc supports multiple configurations via `configs.toml`:
+textual-cmdorc supports multiple configurations via `cmdorc.toml`:
 
 1. Create individual config files for different purposes:
    - `build.toml` - Build commands
    - `test.toml` - Test commands
    - `deploy.toml` - Deployment commands
 
-2. Create `configs.toml` to define how they're used:
+2. Create `cmdorc.toml` to define how they're used:
 
 ```toml
 [[config]]
@@ -281,7 +279,7 @@ examples/
 │   ├── config.toml
 │   └── README.md
 └── multi-config/
-    ├── configs.toml
+    ├── cmdorc.toml
     ├── config.toml
     ├── build.toml
     ├── test.toml
@@ -292,7 +290,7 @@ examples/
 ### Implementation Checklist
 
 **Phase 1: Core Loading (Week 1)**
-- [ ] Parse configs.toml
+- [ ] Parse cmdorc.toml
 - [ ] Resolve includes
 - [ ] Handle circular includes error
 - [ ] Handle duplicate command names error
@@ -307,8 +305,8 @@ examples/
 - [ ] Save active config to settings.json
 
 **Phase 3: Startup & Errors (Week 3)**
-- [ ] Detect configs.toml vs config.toml
-- [ ] Initial setup prompt (create config.toml vs configs.toml)
+- [ ] Detect cmdorc.toml vs config.toml
+- [ ] Initial setup prompt (create config.toml vs cmdorc.toml)
 - [ ] Validation on startup
 - [ ] Error messages for missing/invalid configs
 - [ ] CLI flags (--config, --list-configs, --validate, --init-configs)
@@ -325,7 +323,7 @@ examples/
 ✅ **Power User Friendly**: File-based is what developers want  
 ✅ **Clear Upgrade Path**: Easy to add UI tools later if needed  
 ✅ **Testable**: File-based config is easy to test  
-✅ **Flexible**: Users can script/generate configs.toml  
+✅ **Flexible**: Users can script/generate cmdorc.toml  
 ✅ **Version Control**: Everything in files, easy to track  
 
 ### Future Enhancements (Post-MVP)
