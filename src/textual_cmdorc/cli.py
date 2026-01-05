@@ -1,21 +1,11 @@
 """CLI entry point for cmdorc-tui: auto-generates default config and launches the TUI."""
 
 import argparse
-import logging
 import sys
 from pathlib import Path
 
 from textual_cmdorc import __version__
 from textual_cmdorc.cmdorc_app import CmdorcApp
-
-# Configure logging with a handler to actually output messages
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s:%(name)s:%(message)s",
-)
-# Enable debug for our packages (will show file watcher activity)
-logging.getLogger("textual_cmdorc").setLevel(logging.DEBUG)
-logging.getLogger("cmdorc_frontend").setLevel(logging.DEBUG)
 
 # Default config template for Python development workflows
 DEFAULT_CONFIG_TEMPLATE = """\
@@ -91,9 +81,11 @@ def parse_args() -> argparse.Namespace:
         prog="cmdorc-tui",
         description="A TUI frontend for cmdorc command orchestration.",
         epilog="Examples:\n"
-        "  cmdorc-tui                      # Auto-create config.toml and launch\n"
-        "  cmdorc-tui --config my-flow.toml # Use custom config\n"
-        "  cmdorc-tui --version             # Show version",
+        "  cmdorc-tui                         # Auto-create config.toml and launch\n"
+        "  cmdorc-tui --config my-flow.toml   # Use custom config\n"
+        "  cmdorc-tui --log-file              # Enable logging to ~/.cmdorc/logs/cmdorc-tui.log\n"
+        "  cmdorc-tui --log-file --log-all    # Log all packages (cmdorc, textual-filelink)\n"
+        "  cmdorc-tui --version               # Show version",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -111,10 +103,29 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--log-file",
+        action="store_true",
+        help="Enable logging to ~/.cmdorc/logs/cmdorc-tui.log",
+    )
+
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="DEBUG",
+        help="Set logging level (default: DEBUG)",
+    )
+
+    parser.add_argument(
+        "--log-all",
+        action="store_true",
+        help="Also log cmdorc and textual-filelink packages",
+    )
+
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
-        help="Enable verbose logging (shows file watcher activity)",
+        help="Alias for --log-file (backward compatibility)",
     )
 
     return parser.parse_args()
@@ -126,16 +137,18 @@ def main() -> None:
 
     Handles:
     - Argument parsing
+    - Logging configuration
     - Auto-creation of config.toml
     - Launching CmdorcApp
     - Error handling and exit codes
     """
     args = parse_args()
 
-    # Configure logging level based on --verbose flag
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.getLogger("textual_cmdorc").setLevel(log_level)
-    logging.getLogger("cmdorc_frontend").setLevel(log_level)
+    # Configure logging based on flags
+    if args.log_file or args.verbose:
+        from textual_cmdorc.logging import setup_logging
+
+        setup_logging(level=args.log_level, log_all=args.log_all)
 
     # Resolve config path to absolute path
     config_path = Path(args.config).resolve()

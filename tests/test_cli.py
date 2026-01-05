@@ -131,6 +131,56 @@ class TestParseArgs:
             args = parse_args()
             assert args.verbose is False
 
+    def test_parse_args_log_file_flag(self):
+        """Test --log-file flag."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "--log-file"]):
+            args = parse_args()
+            assert args.log_file is True
+
+    def test_parse_args_no_log_file_flag(self):
+        """Test default (no --log-file flag)."""
+        with patch.object(sys, "argv", ["cmdorc-tui"]):
+            args = parse_args()
+            assert args.log_file is False
+
+    def test_parse_args_log_level_flag(self):
+        """Test --log-level flag."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "--log-level", "WARNING"]):
+            args = parse_args()
+            assert args.log_level == "WARNING"
+
+    def test_parse_args_log_level_default(self):
+        """Test --log-level default value."""
+        with patch.object(sys, "argv", ["cmdorc-tui"]):
+            args = parse_args()
+            assert args.log_level == "DEBUG"
+
+    def test_parse_args_log_all_flag(self):
+        """Test --log-all flag."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "--log-all"]):
+            args = parse_args()
+            assert args.log_all is True
+
+    def test_parse_args_no_log_all_flag(self):
+        """Test default (no --log-all flag)."""
+        with patch.object(sys, "argv", ["cmdorc-tui"]):
+            args = parse_args()
+            assert args.log_all is False
+
+    def test_parse_args_combined_logging_flags(self):
+        """Test combining logging flags."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "--log-file", "--log-level", "INFO", "--log-all"]):
+            args = parse_args()
+            assert args.log_file is True
+            assert args.log_level == "INFO"
+            assert args.log_all is True
+
+    def test_parse_args_verbose_backward_compat(self):
+        """Test that -v is backward compatible (alias for --log-file)."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "-v"]):
+            args = parse_args()
+            assert args.verbose is True
+
 
 class TestMain:
     """Tests for main function."""

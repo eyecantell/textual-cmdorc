@@ -41,6 +41,10 @@ pdm run cmdorc-tui
 # Or with custom config
 pdm run cmdorc-tui --config=config.toml
 
+# Run with logging enabled
+pdm run cmdorc-tui --log-file
+pdm run cmdorc-tui --log-file --log-level INFO --log-all
+
 # Build for distribution
 pdm build
 ```
@@ -66,7 +70,8 @@ Two-layer widget architecture for maximum flexibility:
 - **cmdorc_app.py** - Contains both:
   - `CmdorcWidget`: Composable widget for embedding in multi-panel layouts
   - `CmdorcApp`: Thin standalone wrapper (adds Header/Footer to CmdorcWidget)
-- **cli.py** - Command-line interface with auto-config generation
+- **cli.py** - Command-line interface with auto-config generation and logging configuration
+- **logging.py** - Logging utilities for debugging (`setup_logging()`, `disable_logging()`, `get_log_file_path()`)
 - **tooltip_builders.py** - `TooltipBuilder`: Constructs all tooltip content (status, play/stop, output)
 - **formatting.py** - Pure utility functions for time formatting, ANSI stripping, output preview
 
@@ -172,16 +177,95 @@ debounce_ms = 300                # optional, default 300ms
 
 Watchers are loaded by `load_frontend_config()` and managed by `FileWatcherManager`.
 
+## Logging
+
+textual-cmdorc includes a comprehensive logging system that coordinates with cmdorc and textual-filelink logging.
+
+### Design Principles
+- **Silent by default**: NullHandler attached on import (library best practice)
+- **File-only logging**: No console output to avoid interfering with TUI display
+- **Opt-in via CLI**: Users must explicitly enable logging with `--log-file`
+- **Multi-package coordination**: Can enable logging for cmdorc + textual-filelink + textual-cmdorc together
+
+### CLI Flags
+```bash
+cmdorc-tui                           # Silent (no logging)
+cmdorc-tui --log-file                # Enable file logging (DEBUG level)
+cmdorc-tui --log-file --log-level INFO   # File logging at INFO level
+cmdorc-tui --log-file --log-all      # Log all packages (cmdorc + textual-filelink)
+cmdorc-tui -v                        # Alias for --log-file (backward compat)
+```
+
+### Programmatic API
+```python
+from textual_cmdorc import setup_logging, disable_logging, get_log_file_path
+
+# Enable file logging for debugging
+setup_logging()  # Defaults: DEBUG level, ~/.cmdorc/logs/cmdorc-tui.log
+
+# Configure with options
+setup_logging(
+    level="INFO",
+    log_dir="~/.cmdorc/logs",
+    log_filename="my-app.log",
+    log_all=True,  # Also log cmdorc + textual-filelink
+)
+
+# Disable all logging (useful for tests)
+disable_logging()
+
+# Get log file path
+log_path = get_log_file_path()  # Returns Path object
+```
+
+### Logger Namespaces
+- `textual_cmdorc.*` - TUI layer (CmdorcApp, CmdorcWidget, CLI)
+- `cmdorc_frontend.*` - Backend layer (OrchestratorAdapter, FileWatcherManager, config)
+- Both namespaces configured together by `setup_logging()`
+- Set `propagate=False` to prevent duplicate logging to root
+
+### Log Format
+**Detailed** (default):
+```
+2026-01-05 10:23:45 | DEBUG    | cmdorc_frontend.file_watcher:45 | File event detected: modified src/app.py
+```
+
+**Simple**:
+```
+INFO:textual_cmdorc.orchestrator:Command started: Lint
+```
+
+### Log Rotation
+- **Max file size**: 10MB (configurable via `max_bytes`)
+- **Backup count**: 5 files (configurable via `backup_count`)
+- **Default location**: `~/.cmdorc/logs/cmdorc-tui.log`
+
+### When Embedding CmdorcWidget
+Enable logging before creating widgets:
+```python
+from textual_cmdorc import setup_logging, CmdorcWidget
+
+setup_logging()  # Enable before widget creation
+widget = CmdorcWidget("config.toml")
+```
+
+Or use your app's existing logging configuration (textual-cmdorc loggers will propagate):
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)  # Standard Python logging
+```
+
 ## Testing Strategy
 
-Current: **144 tests, 72% coverage** (includes command details modal)
+Current: **186 tests, 73% coverage** (includes command details modal and logging)
 
 ### Test Organization
 - **tests/conftest.py** - Fixtures (mock orchestrator, adapter, app)
-- **tests/test_cli.py** - CLI argument parsing and config generation
+- **tests/test_cli.py** - CLI argument parsing, config generation, and logging flags
 - **tests/test_cmdorc_app.py** - CmdorcWidget lifecycle and callbacks
 - **tests/test_details_screen.py** - CommandDetailsScreen content builders and actions
 - **tests/test_formatting.py** - Formatting utilities (time, output preview, ANSI)
+- **tests/test_logging.py** - Logging utilities (setup, disable, file creation, rotation)
 - **tests/test_models.py** - Config parsing, TriggerSource, KeyboardConfig
 - **tests/test_tooltip_builders.py** - Tooltip content builders
 
@@ -206,6 +290,7 @@ pdm run pytest --cov --cov-report=html
 | File | Purpose | Key Classes |
 | **src/textual_cmdorc/cmdorc_app.py** | Widget + App architecture | `CmdorcWidget`, `CmdorcApp`, `HelpScreen` |
 | **src/textual_cmdorc/details_screen.py** | Command details modal | `CommandDetailsScreen` |
+| **src/textual_cmdorc/logging.py** | Logging utilities | `setup_logging()`, `disable_logging()`, `get_log_file_path()` |
 | **src/textual_cmdorc/tooltip_builders.py** | Tooltip content builders | `TooltipBuilder` |
 | **src/textual_cmdorc/formatting.py** | Formatting utilities | `format_elapsed_time()`, `get_output_preview()` |
 | **src/cmdorc_frontend/orchestrator_adapter.py** | Framework-agnostic backend | `OrchestratorAdapter` |
@@ -213,6 +298,7 @@ pdm run pytest --cov --cov-report=html
 | **src/cmdorc_frontend/models.py** | Core dataclasses | `CommandNode`, `TriggerSource`, `KeyboardConfig` |
 | **src/cmdorc_frontend/file_watcher.py** | Watchdog integration | `FileWatcherManager` |
 | **src/textual_cmdorc/cli.py** | Command-line interface | `main()`, `create_default_config()` |
+| **tests/test_logging.py** | Logging tests | 26 tests, 79% coverage |
 | **tests/test_details_screen.py** | Details modal tests | 20 tests, 71% coverage |
 | **architecture.md** | Full design reference | Simplified design decisions |
 | **README.md** | User-facing quickstart | Features, API, examples |
@@ -247,6 +333,15 @@ adapter.attach(loop)
 # Sync-safe command execution from UI callbacks
 def on_button_clicked(self):
     self.adapter.request_run("CommandName")  # Safe from UI context
+
+# Enable logging before creating widgets
+from textual_cmdorc import setup_logging, CmdorcWidget
+setup_logging()  # Enable debugging logs
+widget = CmdorcWidget("config.toml")
+
+# Disable logging for tests
+from textual_cmdorc import disable_logging
+disable_logging()  # Silent operation
 ```
 
 ### ✗ Anti-Patterns to Avoid
@@ -287,10 +382,12 @@ from textual_cmdorc import CmdorcController  # Doesn't exist anymore!
 
 ## External Dependencies
 
-- **cmdorc** (0.8.1+) - Core orchestration engine (source of truth for state)
+- **cmdorc** (0.9.0+) - Core orchestration engine (source of truth for state)
   - 0.8.1+ required for correct history ordering (most recent first)
+  - 0.9.0+ includes logging support (`setup_logging()`, `disable_logging()`)
 - **textual** (6.6.0+) - TUI framework (App, widgets, styling)
-- **textual-filelink** (0.8.0+) - CommandLink widget with play/stop/settings buttons and tooltip support
+- **textual-filelink** (0.9.0+) - CommandLink widget with play/stop/settings buttons and tooltip support
+  - 0.9.0+ includes logging support
 - **watchdog** (4.0.0+) - File system event monitoring
 
 ## Key Gotchas

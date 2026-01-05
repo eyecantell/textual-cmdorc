@@ -187,6 +187,57 @@ ignore_dirs = ["__pycache__", ".git"]
 
 Run `cmdorc-tui` without a config file to auto-generate a starter config.
 
+## Logging
+
+By default, cmdorc-tui runs silently (no logging). Enable file-based logging for debugging:
+
+```bash
+# Enable file logging (writes to ~/.cmdorc/logs/cmdorc-tui.log)
+cmdorc-tui --log-file
+
+# With specific log level
+cmdorc-tui --log-file --log-level INFO
+
+# Include cmdorc and textual-filelink logs (for debugging dependencies)
+cmdorc-tui --log-file --log-all
+
+# Backward compatible: -v is an alias for --log-file
+cmdorc-tui -v
+```
+
+**Log Levels:**
+- `DEBUG` - Detailed activity (default when --log-file is used)
+- `INFO` - High-level operations
+- `WARNING` - Non-critical issues
+- `ERROR` - Failures and exceptions
+
+**Log Location:** `~/.cmdorc/logs/cmdorc-tui.log`
+- Rotating log files (10MB max, 5 backups)
+- Automatically creates directory if needed
+
+### Programmatic Logging
+
+When embedding `CmdorcWidget` or using `OrchestratorAdapter`, enable logging before creating widgets:
+
+```python
+from textual_cmdorc import setup_logging, CmdorcWidget
+
+# Enable file logging for debugging
+setup_logging()
+
+# Or configure with options
+setup_logging(level="INFO", log_all=True)
+
+widget = CmdorcWidget("config.toml")
+```
+
+**Disable logging** (useful for tests):
+```python
+from textual_cmdorc import disable_logging
+
+disable_logging()
+```
+
 ## Debugging File Watchers
 
 If file watchers aren't triggering commands automatically, use these debugging steps:
@@ -194,14 +245,14 @@ If file watchers aren't triggering commands automatically, use these debugging s
 ### View File Watcher Activity
 
 ```bash
-# Normal mode (shows startup and errors)
+# Normal mode (silent - no logs)
 cmdorc-tui
 
-# Verbose mode (shows every file change event)
-cmdorc-tui --verbose
+# Enable logging to see file watcher activity
+cmdorc-tui --log-file
 
-# Or use short flag
-cmdorc-tui -v
+# View the log file in real-time
+tail -f ~/.cmdorc/logs/cmdorc-tui.log
 ```
 
 ### Common Issues
@@ -209,15 +260,22 @@ cmdorc-tui -v
 **File watchers not starting:**
 - Verify `watchdog` is installed: `pip list | grep watchdog`
 - Check that watch directory exists in your config
-- Run with `--verbose` to see startup errors
+- Run with `--log-file` to see startup errors in the log
 
 **Commands not triggering on file changes:**
 - Verify trigger name matches between `[[file_watcher]]` and `[[command]]` sections
 - Check pattern syntax: use `**/*.py` for all Python files at any depth
 - Ensure file changes aren't in ignored directories (`__pycache__`, `.git`, etc.)
-- Use `--verbose` to see if file changes are detected
+- Use `--log-file` to see if file changes are detected
 
-### Using Textual Console for Detailed Logs
+**Example log output** (when file watcher triggers):
+```
+2026-01-05 10:23:45 | DEBUG    | cmdorc_frontend.file_watcher:45 | File event detected: modified src/app.py
+2026-01-05 10:23:45 | INFO     | cmdorc_frontend.file_watcher:52 | File watcher triggered: py_file_changed → ['Lint', 'Format']
+2026-01-05 10:23:45 | INFO     | textual_cmdorc.orchestrator:28 | Command started: Lint (trigger: py_file_changed)
+```
+
+### Using Textual Console for Live Monitoring
 
 For even more detailed debugging, use Textual's console in a separate terminal:
 
@@ -225,11 +283,11 @@ For even more detailed debugging, use Textual's console in a separate terminal:
 # Terminal 1: Start textual console
 textual console
 
-# Terminal 2: Run cmdorc-tui
-cmdorc-tui --verbose
+# Terminal 2: Run cmdorc-tui with logging
+cmdorc-tui --log-file
 ```
 
-All logs will appear in the console terminal, including file system events and trigger chains.
+All logs will appear in the console terminal, including file system events and trigger chains, without interfering with the TUI display.
 
 ## Architecture
 
@@ -316,6 +374,36 @@ asyncio.run(main())
 - `on_command_success(name: str, callback: Callable)` - Register success callback
 - `on_command_failed(name: str, callback: Callable)` - Register failure callback
 - `on_command_cancelled(name: str, callback: Callable)` - Register cancellation callback
+
+### Logging Utilities
+
+```python
+from textual_cmdorc import setup_logging, disable_logging, get_log_file_path
+
+# Configure logging
+setup_logging(
+    level="DEBUG",           # Logging level (default: DEBUG)
+    log_dir="~/.cmdorc/logs", # Log directory (default)
+    log_filename="cmdorc-tui.log",  # Log file name (default)
+    max_bytes=10 * 1024 * 1024,  # Max file size before rotation (default: 10MB)
+    backup_count=5,          # Number of backup files (default: 5)
+    format="detailed",       # "simple" or "detailed" (default: detailed)
+    log_all=False,           # Also log cmdorc + textual-filelink (default: False)
+)
+
+# Disable all logging
+disable_logging()
+
+# Get log file path
+log_path = get_log_file_path()  # Returns Path to log file
+```
+
+**Key Points:**
+- Silent by default (NullHandler)
+- File-only logging (no console output to avoid interfering with TUI)
+- Automatic log rotation (10MB files, 5 backups)
+- Configures both `textual_cmdorc` and `cmdorc_frontend` namespaces
+- Optionally enables logging for `cmdorc` and `textual_filelink` packages
 
 ## Development
 
