@@ -10,13 +10,13 @@ Displays comprehensive information about a command including:
 """
 
 import logging
-import os
-import subprocess
+from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
+from textual_filelink import FileLink
 
 from cmdorc_frontend.models import TriggerSource
 from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
@@ -62,6 +62,10 @@ class CommandDetailsScreen(ModalScreen):
         margin-bottom: 1;
     }
 
+    .details-section {
+        margin-bottom: 1;
+    }
+
     .details-section-title {
         text-style: bold;
         margin-top: 1;
@@ -78,6 +82,16 @@ class CommandDetailsScreen(ModalScreen):
         margin-top: 1;
         text-align: center;
     }
+
+    /* FileLink styling within modal */
+    CommandDetailsScreen FileLink {
+        margin-left: 2;
+        padding: 0 1;
+    }
+
+    CommandDetailsScreen FileLink:hover {
+        background: $accent 20%;
+    }
     """
 
     BINDINGS = [
@@ -85,7 +99,7 @@ class CommandDetailsScreen(ModalScreen):
         ("o", "open_output", "Open output"),
         ("r", "run_command", "Run command"),
         ("c", "copy_command", "Copy command"),
-        ("e", "edit_command", "Edit (coming soon)"),
+        ("e", "edit_command", "Edit config"),
     ]
 
     def __init__(self, cmd_name: str, adapter: OrchestratorAdapter, **kwargs):
@@ -119,15 +133,29 @@ class CommandDetailsScreen(ModalScreen):
             # Run history section
             yield Static("", id="history-section")
 
-            # Output section
-            yield Static("", id="output-section")
+            # Output section with embedded FileLink
+            with Vertical(id="output-section-container", classes="details-section"):
+                yield Static("", id="output-section-text")
+                yield FileLink(
+                    path=Path("/dev/null"),  # Placeholder, updated in on_mount
+                    _embedded=True,
+                    id="output-file-link",
+                    tooltip="Press 'o' to open in editor",
+                )
 
-            # Configuration section
-            yield Static("", id="config-section")
+            # Configuration section with embedded FileLink
+            with Vertical(id="config-section-container", classes="details-section"):
+                yield Static("", id="config-section-text")
+                yield FileLink(
+                    path=self.adapter.config_path,
+                    _embedded=True,
+                    id="config-file-link",
+                    tooltip="Press 'e' to edit configuration",
+                )
 
             # Footer with keyboard hints
             yield Static(
-                "Press 'o' to open output | 'r' to run | 'c' to copy command | 'q' to close",
+                "Press 'o' to open output | 'r' to run | 'c' to copy command | 'e' to edit config | 'q' to close",
                 classes="details-footer",
                 id="details-footer",
             )
@@ -193,8 +221,21 @@ class CommandDetailsScreen(ModalScreen):
 
             self.query_one("#triggers-section", Static).update(self._build_triggers_section())
             self.query_one("#history-section", Static).update(self._build_history_section())
-            self.query_one("#output-section", Static).update(self._build_output_section())
-            self.query_one("#config-section", Static).update(self._build_config_section())
+
+            # Update Output section (text + FileLink)
+            output_text, output_path = self._build_output_section_parts()
+            self.query_one("#output-section-text", Static).update(output_text)
+
+            output_link = self.query_one("#output-file-link", FileLink)
+            if output_path:
+                output_link.set_path(output_path)  # In-place update
+                output_link.display = True
+            else:
+                output_link.display = False
+
+            # Update Config section (text only, path is static)
+            config_text = self._build_config_section_text()
+            self.query_one("#config-section-text", Static).update(config_text)
 
         except Exception as e:
             # Log error but don't dismiss - individual sections handle their own errors
@@ -353,7 +394,7 @@ class CommandDetailsScreen(ModalScreen):
     def _build_history_section(self) -> str:
         """Build run history section content."""
         try:
-            lines = ["Run History", "─" * 40]
+            lines = ["", "Run History", "─" * 40]
 
             # Get command config for keep_in_memory
             config = self.adapter.orchestrator._runtime.get_command(self.cmd_name)
@@ -385,19 +426,26 @@ class CommandDetailsScreen(ModalScreen):
             logger.error(f"Failed to build history section: {e}")
             return "Run History\n" + "─" * 40 + "\nError loading history"
 
-    def _build_output_section(self) -> str:
-        """Build output section content."""
+    def _build_output_section_parts(self) -> tuple[str, Path | None]:
+        """Build output section content, returning text and file path separately.
+
+        Returns:
+            tuple: (text_content, file_path)
+        """
         try:
-            lines = ["Output", "─" * 40]
+            lines = ["", "Output", "─" * 40]
 
             # Get latest run output file
             status = self.adapter.orchestrator.get_status(self.cmd_name)
             if not status or not status.last_run or not status.last_run.output_file:
                 lines.append("No output available")
-                return "\n".join(lines)
+                return "\n".join(lines), None
 
             output_file = status.last_run.output_file
-            lines.append(f"Path: {output_file}")
+
+            # Add "File:" label (FileLink will be rendered separately)
+            lines.append("File:")
+            lines.append("")  # Spacing for FileLink widget
             lines.append("")
 
             # Get output preview
@@ -405,7 +453,7 @@ class CommandDetailsScreen(ModalScreen):
 
             if not preview_data:
                 lines.append("(output file not found)")
-                return "\n".join(lines)
+                return "\n".join(lines), output_file  # Still return path
 
             preview_lines, total_lines = preview_data
 
@@ -424,19 +472,24 @@ class CommandDetailsScreen(ModalScreen):
             else:
                 lines.append("Press 'o' to open in editor")
 
-            return "\n".join(lines)
+            return "\n".join(lines), output_file
 
         except Exception as e:
             logger.error(f"Failed to build output section: {e}")
-            return "Output\n" + "─" * 40 + "\nError loading output"
+            return "Output\n" + "─" * 40 + "\nError loading output", None
 
-    def _build_config_section(self) -> str:
-        """Build configuration section content."""
+    def _build_config_section_text(self) -> str:
+        """Build configuration section text content (FileLink rendered separately).
+
+        Returns:
+            Text content without file path line
+        """
         try:
-            lines = ["Configuration", "─" * 40]
+            lines = ["", "Configuration", "─" * 40]
 
-            # Config file path
-            lines.append(f"Path: {self.adapter.config_path}")
+            # Add "File:" label (FileLink will be rendered separately)
+            lines.append("File:")
+            lines.append("")  # Spacing for FileLink widget
             lines.append("")
 
             # Get command config
@@ -482,7 +535,7 @@ class CommandDetailsScreen(ModalScreen):
             relevant_watchers = [w for w in self.adapter._watchers if w.trigger in config.triggers]
 
             if relevant_watchers:
-                lines.append("File watchers:")
+                lines.append("", "File watchers:")
                 for watcher in relevant_watchers:
                     lines.append(f"  • dir: {watcher.dir}")
                     if watcher.patterns:
@@ -524,22 +577,17 @@ class CommandDetailsScreen(ModalScreen):
     # ========================================================================
 
     async def action_open_output(self) -> None:
-        """Open latest output file in $EDITOR."""
+        """Open latest output file by activating FileLink widget."""
         try:
-            status = self.adapter.orchestrator.get_status(self.cmd_name)
-            if not status or not status.last_run or not status.last_run.output_file:
+            output_link = self.query_one("#output-file-link", FileLink)
+
+            if not output_link.display:
                 if self.app:
                     self.app.notify("No output file available", severity="warning")
                 return
 
-            output_file = status.last_run.output_file
-
-            # Get editor from environment
-            editor = os.environ.get("EDITOR", "vim")
-
-            # Suspend Textual app to run editor
-            with self.app.suspend():
-                subprocess.run([editor, str(output_file)])
+            # Programmatically activate FileLink
+            output_link.open_file()
 
         except Exception as e:
             logger.error(f"Failed to open output: {e}")
@@ -570,6 +618,14 @@ class CommandDetailsScreen(ModalScreen):
                 self.app.notify(f"Failed to copy command: {e}", severity="error")
 
     async def action_edit_command(self) -> None:
-        """Edit command configuration (placeholder)."""
-        if self.app:
-            self.app.notify("Edit feature coming soon", severity="information")
+        """Open config file for editing by activating FileLink widget."""
+        try:
+            config_link = self.query_one("#config-file-link", FileLink)
+
+            # Programmatically activate FileLink
+            config_link.open_file()
+
+        except Exception as e:
+            logger.error(f"Failed to open config: {e}")
+            if self.app:
+                self.app.notify(f"Failed to open editor: {e}", severity="error")

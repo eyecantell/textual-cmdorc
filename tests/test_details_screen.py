@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, PropertyMock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from conftest import CommandConfig, RunState
@@ -81,6 +81,24 @@ def mock_adapter(mock_orchestrator, tmp_path):
 def details_screen(mock_adapter):
     """Create CommandDetailsScreen instance for testing."""
     return CommandDetailsScreen(cmd_name="Tests", adapter=mock_adapter)
+
+
+@pytest.fixture
+async def mounted_details_screen(mock_adapter):
+    """Create and mount CommandDetailsScreen for widget testing."""
+    from textual.app import App
+
+    class TestApp(App):
+        def on_mount(self):
+            self.push_screen(CommandDetailsScreen(cmd_name="Tests", adapter=mock_adapter))
+
+    app = TestApp()
+    async with app.run_test() as pilot:
+        # Wait for screen to be pushed and mounted
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, CommandDetailsScreen)
+        yield screen
 
 
 # ========================================================================
@@ -265,12 +283,12 @@ def test_build_output_section_with_preview(details_screen, mock_orchestrator, tm
     mock_orchestrator.get_status = Mock(return_value=status)
 
     # Build section
-    result = details_screen._build_output_section()
+    text, path = details_screen._build_output_section_parts()
 
     # Verify
-    assert "Output" in result
-    assert str(output_file) in result
-    assert "Preview" in result
+    assert "Output" in text
+    assert "Preview" in text
+    assert path == output_file
 
 
 def test_build_output_section_no_output(details_screen, mock_orchestrator):
@@ -281,10 +299,11 @@ def test_build_output_section_no_output(details_screen, mock_orchestrator):
     mock_orchestrator.get_status = Mock(return_value=status)
 
     # Build section
-    result = details_screen._build_output_section()
+    text, path = details_screen._build_output_section_parts()
 
     # Verify
-    assert "No output available" in result
+    assert "No output available" in text
+    assert path is None
 
 
 def test_build_config_section_non_defaults(details_screen, mock_orchestrator, mock_adapter):
@@ -302,11 +321,10 @@ def test_build_config_section_non_defaults(details_screen, mock_orchestrator, mo
     mock_orchestrator._runtime.get_command = Mock(return_value=config)
 
     # Build section
-    result = details_screen._build_config_section()
+    result = details_screen._build_config_section_text()
 
     # Verify
     assert "Configuration" in result
-    assert str(mock_adapter.config_path) in result
     assert "Timeout: 300s" in result
     assert "Max concurrent: 2" in result
     assert "Debounce: 500ms" in result
@@ -329,7 +347,7 @@ def test_build_config_section_with_watchers(details_screen, mock_orchestrator, m
     mock_orchestrator._runtime.get_command = Mock(return_value=config)
 
     # Build section
-    result = details_screen._build_config_section()
+    result = details_screen._build_config_section_text()
 
     # Verify
     assert "File watchers" in result
@@ -373,43 +391,43 @@ async def test_action_copy_command(details_screen, mock_orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_action_edit_command_placeholder(details_screen):
-    """'e' key shows placeholder notification."""
-    # Mock app using patch.object
-    mock_app = Mock()
-    with patch.object(type(details_screen), "app", new_callable=lambda: mock_app):
+async def test_action_edit_command_now_functional(mounted_details_screen):
+    """'e' key now opens config file for editing (no longer placeholder)."""
+    # Mock FileLink.open_file()
+    link = mounted_details_screen.query_one("#config-file-link")
+    with patch.object(link, "open_file") as mock_open:
         # Call action
-        await details_screen.action_edit_command()
+        await mounted_details_screen.action_edit_command()
 
-        # Verify
-        mock_app.notify.assert_called_once()
-        call_args = mock_app.notify.call_args
-        assert "coming soon" in call_args[0][0].lower()
+        # Verify FileLink was activated
+        mock_open.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_action_open_output_no_file(details_screen, mock_orchestrator):
+async def test_action_open_output_no_file(mounted_details_screen, mock_orchestrator):
     """'o' key shows notification when no output file."""
     # Setup mock status with no output
     status = Mock()
     status.last_run = None
     mock_orchestrator.get_status = Mock(return_value=status)
 
-    # Mock app using patch.object
-    mock_app = Mock()
-    with patch.object(type(details_screen), "app", new_callable=lambda: mock_app):
+    # Refresh to update FileLink
+    mounted_details_screen._refresh_content()
+
+    # Mock app.notify
+    with patch.object(mounted_details_screen.app, "notify") as mock_notify:
         # Call action
-        await details_screen.action_open_output()
+        await mounted_details_screen.action_open_output()
 
         # Verify
-        mock_app.notify.assert_called_once()
-        call_args = mock_app.notify.call_args
+        mock_notify.assert_called_once()
+        call_args = mock_notify.call_args
         assert "No output file" in call_args[0][0]
 
 
 @pytest.mark.asyncio
-async def test_action_open_output_with_file(details_screen, mock_orchestrator, tmp_path):
-    """'o' key opens output file in editor."""
+async def test_action_open_output_with_file(mounted_details_screen, mock_orchestrator, tmp_path):
+    """'o' key opens output file via FileLink."""
     # Create temporary output file
     output_file = tmp_path / "output.txt"
     output_file.write_text("test output")
@@ -422,19 +440,17 @@ async def test_action_open_output_with_file(details_screen, mock_orchestrator, t
     status.last_run = last_run
     mock_orchestrator.get_status = Mock(return_value=status)
 
-    # Mock app using patch.object
-    mock_app = Mock()
-    mock_app.suspend = MagicMock()
+    # Refresh to update FileLink
+    mounted_details_screen._refresh_content()
 
-    with (
-        patch.object(type(details_screen), "app", new_callable=lambda: mock_app),
-        patch("textual_cmdorc.details_screen.subprocess.run") as mock_run,
-    ):
+    # Mock FileLink.open_file()
+    link = mounted_details_screen.query_one("#output-file-link")
+    with patch.object(link, "open_file") as mock_open:
         # Call action
-        await details_screen.action_open_output()
+        await mounted_details_screen.action_open_output()
 
-        # Verify subprocess was called (would open editor)
-        mock_run.assert_called_once()
+        # Verify FileLink was activated
+        mock_open.assert_called_once()
 
 
 # ========================================================================
@@ -481,3 +497,114 @@ def test_build_status_section_error_handling(details_screen, mock_orchestrator):
 
     # Should return error message
     assert "Error loading status" in result
+
+
+# ========================================================================
+# FileLink Integration Tests
+# ========================================================================
+
+
+@pytest.mark.asyncio
+async def test_output_section_contains_filelink(mounted_details_screen):
+    """Output section contains FileLink widget."""
+    link = mounted_details_screen.query_one("#output-file-link")
+    assert link is not None
+
+
+@pytest.mark.asyncio
+async def test_config_section_contains_filelink(mounted_details_screen, mock_adapter):
+    """Config section contains FileLink with correct path."""
+    link = mounted_details_screen.query_one("#config-file-link")
+    assert link is not None
+    assert link.path == mock_adapter.config_path
+
+
+@pytest.mark.asyncio
+async def test_output_filelink_updates_on_refresh(mounted_details_screen, mock_orchestrator):
+    """FileLink path updates when output file changes."""
+    # Initial state: no output
+    mounted_details_screen._refresh_content()
+    link = mounted_details_screen.query_one("#output-file-link")
+    assert link.display is False
+
+    # Add output file
+    output_file = Path("/tmp/new_output.txt")
+    last_run = Mock()
+    last_run.output_file = output_file
+    status = Mock()
+    status.last_run = last_run
+    mock_orchestrator.get_status.return_value = status
+
+    # Refresh
+    mounted_details_screen._refresh_content()
+
+    # Verify update
+    assert link.display is True
+    assert link.path == output_file
+
+
+@pytest.mark.asyncio
+async def test_output_filelink_hides_when_no_output(mounted_details_screen, mock_orchestrator):
+    """FileLink hides when output file becomes unavailable."""
+    # Setup with output
+    output_file = Path("/tmp/output.txt")
+    last_run = Mock()
+    last_run.output_file = output_file
+    status = Mock()
+    status.last_run = last_run
+    mock_orchestrator.get_status.return_value = status
+    mounted_details_screen._refresh_content()
+
+    link = mounted_details_screen.query_one("#output-file-link")
+    assert link.display is True
+
+    # Remove output
+    last_run.output_file = None
+    mounted_details_screen._refresh_content()
+
+    # Verify hidden
+    assert link.display is False
+
+
+@pytest.mark.asyncio
+async def test_action_open_output_activates_filelink(mounted_details_screen, mock_orchestrator):
+    """'o' key programmatically opens FileLink."""
+    # Setup output file
+    output_file = Path("/tmp/output.txt")
+    last_run = Mock()
+    last_run.output_file = output_file
+    status = Mock()
+    status.last_run = last_run
+    mock_orchestrator.get_status.return_value = status
+    mounted_details_screen._refresh_content()
+
+    # Mock FileLink.open_file()
+    link = mounted_details_screen.query_one("#output-file-link")
+    with patch.object(link, "open_file") as mock_open:
+        await mounted_details_screen.action_open_output()
+        mock_open.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_action_open_output_warns_when_no_file(mounted_details_screen, mock_orchestrator):
+    """'o' key shows warning when no output file available."""
+    # Setup: no output file
+    mounted_details_screen._refresh_content()
+    link = mounted_details_screen.query_one("#output-file-link")
+    assert link.display is False
+
+    # Mock app.notify
+    with patch.object(mounted_details_screen.app, "notify") as mock_notify:
+        # Action should warn
+        await mounted_details_screen.action_open_output()
+        mock_notify.assert_called_once_with("No output file available", severity="warning")
+
+
+@pytest.mark.asyncio
+async def test_action_edit_command_opens_config(mounted_details_screen, mock_adapter):
+    """'e' key opens config file for editing."""
+    # Mock FileLink.open_file()
+    link = mounted_details_screen.query_one("#config-file-link")
+    with patch.object(link, "open_file") as mock_open:
+        await mounted_details_screen.action_edit_command()
+        mock_open.assert_called_once()
