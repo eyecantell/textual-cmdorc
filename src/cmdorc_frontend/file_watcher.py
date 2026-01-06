@@ -56,15 +56,22 @@ class _DebouncedHandler(FileSystemEventHandler):
         Returns:
             True if path matches filters
         """
+        logger.debug(f"Checking filters for: {path}")
+
         # Check if path is in ignored directory
         if self.ignore_dirs:
             for part in path.parts:
                 if part in self.ignore_dirs:
+                    logger.debug(f"  ❌ Ignored dir: {part} in {path.parts}")
                     return False
+            logger.debug("  ✓ Ignore dirs check: PASS")
 
         # Check extensions if specified
-        if self.extensions and path.suffix not in self.extensions:
-            return False
+        if self.extensions:
+            if path.suffix not in self.extensions:
+                logger.debug(f"  ❌ Extension check: {path.suffix} not in {self.extensions}")
+                return False
+            logger.debug(f"  ✓ Extension check: PASS ({path.suffix})")
 
         # Check patterns if specified (simple suffix matching)
         if self.patterns:
@@ -75,14 +82,18 @@ class _DebouncedHandler(FileSystemEventHandler):
                     suffix = pattern[4:]  # Remove "**/*"
                     if path.name.endswith(suffix):
                         matched = True
+                        logger.debug(f"  ✓ Pattern check: PASS (matches {pattern})")
                         break
                 elif pattern.startswith("*."):
                     if path.suffix == pattern[1:]:
                         matched = True
+                        logger.debug(f"  ✓ Pattern check: PASS (matches {pattern})")
                         break
             if not matched:
+                logger.debug(f"  ❌ Pattern check: No match for patterns {self.patterns}")
                 return False
 
+        logger.debug(f"  ✅ All filters PASSED for {path}")
         return True
 
     def _schedule_trigger(self) -> None:
@@ -167,6 +178,10 @@ class FileWatcherManager:
         self.handlers.append(handler)
 
         logger.info(f"Watching {config.dir} for '{config.trigger}' (debounce: {config.debounce_ms}ms)")
+        logger.debug(
+            f"Watch config - Recursive: True, Patterns: {config.patterns}, "
+            f"Extensions: {config.extensions}, Ignore: {config.ignore_dirs}"
+        )
 
     def start(self) -> None:
         """Start all file watchers."""
