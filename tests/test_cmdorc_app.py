@@ -254,6 +254,48 @@ class TestCmdorcWidgetLifecycleCallbacks:
             assert call_kwargs["running"] is True
             assert call_kwargs["icon"] == "⏳"
 
+    @pytest.mark.asyncio
+    async def test_on_command_started_clears_output_path(self, mock_adapter, mock_config_path):
+        """Test that starting a command clears the output path and updates tooltip."""
+        with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
+            widget = CmdorcWidget(config_path=str(mock_config_path))
+
+            # Create a mock link with output path clearing capability
+            mock_link = Mock()
+            mock_link.set_status = Mock()
+            mock_link.set_output_path = Mock()
+            mock_link.set_name_tooltip = Mock()
+
+            widget._get_link = Mock(return_value=mock_link)
+
+            # Mock tooltip_builder
+            widget.tooltip_builder = Mock()
+            widget.tooltip_builder.build_status_tooltip_running = Mock(return_value="Test running")
+            widget.tooltip_builder.build_stop_tooltip = Mock(return_value="Stop test")
+            widget.tooltip_builder.build_output_tooltip = Mock(
+                return_value="Test\n\nCommand running - output will be available after completion"
+            )
+
+            # Create a handle
+            handle = RunHandle(name="Test")
+            handle.start_time = datetime.now()
+
+            # Call the callback
+            widget._on_command_started("Test", handle)
+
+            # Verify output path was cleared
+            mock_link.set_output_path.assert_called_once_with(None)
+
+            # Verify output tooltip was updated with is_running=True via set_name_tooltip
+            widget.tooltip_builder.build_output_tooltip.assert_called_once_with("Test", is_running=True)
+            mock_link.set_name_tooltip.assert_called_once_with(
+                "Test\n\nCommand running - output will be available after completion",
+                append_shortcuts=False,
+            )
+
+            # Verify set_status was also called (normal behavior)
+            mock_link.set_status.assert_called_once()
+
 
 class TestCmdorcWidgetReload:
     """Test CmdorcWidget configuration reload functionality."""

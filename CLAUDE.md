@@ -257,7 +257,7 @@ logging.basicConfig(level=logging.DEBUG)  # Standard Python logging
 
 ## Testing Strategy
 
-Current: **186 tests, 73% coverage** (includes command details modal and logging)
+Current: **188 tests, 73% coverage** (includes command details modal and logging)
 
 ### Test Organization
 - **tests/conftest.py** - Fixtures (mock orchestrator, adapter, app)

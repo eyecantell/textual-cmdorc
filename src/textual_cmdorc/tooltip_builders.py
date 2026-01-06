@@ -336,7 +336,7 @@ class TooltipBuilder:
     # Command Name Tooltip Builder (Output Preview)
     # ========================================================================
 
-    def build_output_tooltip(self, cmd_name: str) -> str:
+    def build_output_tooltip(self, cmd_name: str, is_running: bool = False) -> str:
         """Build tooltip for command name (output preview).
 
         Shows:
@@ -346,6 +346,7 @@ class TooltipBuilder:
 
         Args:
             cmd_name: Command name
+            is_running: True if command is currently running
 
         Returns:
             Formatted tooltip string
@@ -360,6 +361,11 @@ class TooltipBuilder:
                 return "\n".join(lines)
 
             output_file = status.last_run.output_file
+
+            # Don't show historical output info if command is currently running
+            if is_running:
+                lines.append("Command running - output will be available after completion")
+                return "\n".join(lines)
 
             # Get preview using formatting utility
             preview_data = get_output_preview(output_file, max_lines=1, max_line_length=60)

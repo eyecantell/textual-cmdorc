@@ -453,7 +453,8 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 - ✅ Command details modal (comprehensive command information)
 - ✅ Config reload (live without restart)
 - ✅ CLI with auto-config generation
-- ✅ 144 passing tests (72% coverage)
+- ✅ Logging infrastructure (file-based, silent by default)
+- ✅ 188 passing tests (73% coverage)
 
 ### Known Limitations
 - No log pane (use terminal output instead)

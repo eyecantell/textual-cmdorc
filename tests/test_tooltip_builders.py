@@ -350,6 +350,34 @@ class TestTooltipBuilderOutputTooltip:
         finally:
             output_file.unlink()
 
+    def test_build_output_tooltip_running_command_with_old_output(self, mock_adapter):
+        """Test that running commands don't show old output info."""
+        with NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+            f.write("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\n")
+            f.flush()
+            output_file = Path(f.name)
+
+        try:
+            # Setup: Command has old output in history
+            mock_status = Mock()
+            mock_status.last_run = Mock()
+            mock_status.last_run.output_file = output_file
+
+            mock_adapter.orchestrator.get_status.return_value = mock_status
+
+            builder = TooltipBuilder(mock_adapter)
+
+            # Call with is_running=True
+            result = builder.build_output_tooltip("Test", is_running=True)
+
+            # Should NOT show old file info
+            assert "Command running - output will be available after completion" in result
+            assert "Test" in result
+            assert "[" not in result  # No line count
+            assert "Click to open" not in result
+        finally:
+            output_file.unlink()
+
 
 class TestTooltipBuilderHelpers:
     """Tests for helper methods."""

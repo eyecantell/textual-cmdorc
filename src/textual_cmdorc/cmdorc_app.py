@@ -199,13 +199,17 @@ class CmdorcWidget(Widget):
                             initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
                             show_timer=True,
                             show_settings=True,
-                            tooltip=self.tooltip_builder.build_output_tooltip(cmd_name),
                             timer_field_width=8,
                         )
                         # Set play/stop button tooltips
                         link.set_play_stop_tooltips(
                             run_tooltip=self.tooltip_builder.build_play_tooltip(cmd_name),
                             stop_tooltip=self.tooltip_builder.build_stop_tooltip(cmd_name, None),
+                            append_shortcuts=False,
+                        )
+                        # Set name/output tooltip
+                        link.set_name_tooltip(
+                            self.tooltip_builder.build_output_tooltip(cmd_name, is_running=False),
                             append_shortcuts=False,
                         )
                         self.file_list.add_item(link)
@@ -419,6 +423,15 @@ class CmdorcWidget(Widget):
 
         link = self._get_link(name)
         if link:
+            # Clear output link from previous run (avoid showing stale output)
+            link.set_output_path(None)
+
+            # Update output tooltip to reflect no output available yet
+            link.set_name_tooltip(
+                self.tooltip_builder.build_output_tooltip(name, is_running=True),
+                append_shortcuts=False,
+            )
+
             # Update status icon tooltip
             status_tooltip = self.tooltip_builder.build_status_tooltip_running(name, handle)
 
@@ -462,7 +475,10 @@ class CmdorcWidget(Widget):
             )
 
             # Update command name tooltip with output preview
-            link.tooltip = self.tooltip_builder.build_output_tooltip(name)
+            link.set_name_tooltip(
+                self.tooltip_builder.build_output_tooltip(name, is_running=False),
+                append_shortcuts=False,
+            )
 
             # Update output_path if available
             if handle.output_file:
@@ -491,7 +507,10 @@ class CmdorcWidget(Widget):
             )
 
             # Update command name tooltip with output preview
-            link.tooltip = self.tooltip_builder.build_output_tooltip(name)
+            link.set_name_tooltip(
+                self.tooltip_builder.build_output_tooltip(name, is_running=False),
+                append_shortcuts=False,
+            )
 
             # Update output_path if available
             if handle.output_file:
@@ -520,7 +539,10 @@ class CmdorcWidget(Widget):
             )
 
             # Update command name tooltip with output preview
-            link.tooltip = self.tooltip_builder.build_output_tooltip(name)
+            link.set_name_tooltip(
+                self.tooltip_builder.build_output_tooltip(name, is_running=False),
+                append_shortcuts=False,
+            )
 
             # Update output_path if available
             if handle.output_file:
@@ -599,12 +621,16 @@ class CmdorcWidget(Widget):
                         initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
                         show_timer=True,
                         show_settings=True,
-                        tooltip=self.tooltip_builder.build_output_tooltip(cmd_name),
                         timer_field_width=8,
                     )
                     link.set_play_stop_tooltips(
                         run_tooltip=self.tooltip_builder.build_play_tooltip(cmd_name),
                         stop_tooltip=self.tooltip_builder.build_stop_tooltip(cmd_name, None),
+                        append_shortcuts=False,
+                    )
+                    # Set name/output tooltip
+                    link.set_name_tooltip(
+                        self.tooltip_builder.build_output_tooltip(cmd_name, is_running=False),
                         append_shortcuts=False,
                     )
                     self.file_list.add_item(link)
