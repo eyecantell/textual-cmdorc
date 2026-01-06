@@ -127,7 +127,7 @@ class CommandDetailsScreen(ModalScreen):
 
             # Footer with keyboard hints
             yield Static(
-                "Press [o] to open output | [r] to run | [c] to copy command | [q] to close",
+                "Press 'o' to open output | 'r' to run | 'c' to copy command | 'q' to close",
                 classes="details-footer",
                 id="details-footer",
             )
