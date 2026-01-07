@@ -22,6 +22,7 @@ class _DebouncedHandler(FileSystemEventHandler):
         trigger_name: str,
         orchestrator: CommandOrchestrator,
         loop: asyncio.AbstractEventLoop,
+        manager: "FileWatcherManager",
         debounce_ms: int,
         extensions: list[str] | None = None,
         ignore_dirs: list[str] | None = None,
@@ -32,6 +33,7 @@ class _DebouncedHandler(FileSystemEventHandler):
             trigger_name: Name of trigger to fire
             orchestrator: CommandOrchestrator instance
             loop: Event loop for scheduling
+            manager: FileWatcherManager instance (to check enabled state)
             debounce_ms: Debounce delay in milliseconds
             extensions: Optional file extensions to match (e.g., [".py", ".txt"])
             ignore_dirs: Optional directory names to ignore
@@ -39,6 +41,7 @@ class _DebouncedHandler(FileSystemEventHandler):
         self.trigger_name = trigger_name
         self.orchestrator = orchestrator
         self.loop = loop
+        self.manager = manager
         self.debounce_ms = debounce_ms
         self.extensions = extensions
         self.ignore_dirs = ignore_dirs or []
@@ -83,7 +86,12 @@ class _DebouncedHandler(FileSystemEventHandler):
 
         # Schedule new trigger
         def fire_trigger():
-            """Fire trigger on event loop."""
+            """Fire trigger on event loop (only if manager is enabled)."""
+            # Check if watchers are enabled before triggering
+            if not self.manager._enabled:
+                logger.debug(f"Skipping trigger '{self.trigger_name}' - watchers disabled")
+                return
+
             try:
                 self.loop.call_soon_threadsafe(
                     lambda: asyncio.create_task(self.orchestrator.trigger(self.trigger_name))
@@ -130,6 +138,7 @@ class FileWatcherManager:
         self.loop = loop
         self.observer = PollingObserver(timeout=1.0)
         self.handlers: list[_DebouncedHandler] = []
+        self._enabled = True  # Controls whether triggers fire
 
     def _discover_directories(self, root: Path, ignore_dirs: list[str] | None) -> list[Path]:
         """Recursively discover all subdirectories, respecting ignore_dirs.
@@ -200,6 +209,7 @@ class FileWatcherManager:
             trigger_name=config.trigger,
             orchestrator=self.orchestrator,
             loop=self.loop,
+            manager=self,
             debounce_ms=config.debounce_ms,
             extensions=config.extensions,
             ignore_dirs=config.ignore_dirs,
@@ -244,3 +254,29 @@ class FileWatcherManager:
         for handler in self.handlers:
             if handler._timer:
                 handler._timer.cancel()
+
+    def enable(self) -> None:
+        """Enable file watcher triggers.
+
+        File events will continue to be detected, but triggers will now fire.
+        """
+        if not self._enabled:
+            self._enabled = True
+            logger.info("File watcher triggers enabled")
+
+    def disable(self) -> None:
+        """Disable file watcher triggers.
+
+        File events will still be detected, but triggers will not fire.
+        """
+        if self._enabled:
+            self._enabled = False
+            logger.info("File watcher triggers disabled")
+
+    def is_enabled(self) -> bool:
+        """Check if file watcher triggers are enabled.
+
+        Returns:
+            True if triggers are enabled, False otherwise.
+        """
+        return self._enabled

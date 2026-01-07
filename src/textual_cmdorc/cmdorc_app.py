@@ -31,6 +31,7 @@ from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
 
 from .details_screen import CommandDetailsScreen
 from .tooltip_builders import TooltipBuilder
+from .watcher_status_line import WatcherStatusLine
 
 # Logger for warnings and errors
 logger = logging.getLogger(__name__)
@@ -103,6 +104,21 @@ class CmdorcWidget(Widget):
         width: 1fr;
     }
 
+    WatcherStatusLine {
+        height: 1;
+        width: 100%;
+        dock: top;
+        padding: 0 1;
+        border-bottom: solid $accent;
+        color: $text-muted;
+        text-style: bold;
+    }
+
+    WatcherStatusLine:hover {
+        color: $accent;
+        background: $panel;
+    }
+
     FileLinkList {
         height: 1fr;
         border: solid $accent;
@@ -113,6 +129,10 @@ class CmdorcWidget(Widget):
         margin: 0 0 1 0;
     }
     """
+
+    BINDINGS = [
+        Binding("w", "toggle_watchers", "Toggle file watchers", show=False),
+    ]
 
     def __init__(self, config_path: str = "config.toml", **kwargs):
         """Initialize widget.
@@ -125,6 +145,7 @@ class CmdorcWidget(Widget):
         self.adapter: OrchestratorAdapter | None = None
         self.file_list: FileLinkList | None = None
         self.tooltip_builder: TooltipBuilder | None = None
+        self.watcher_status: WatcherStatusLine | None = None
 
         # Track running commands for state management
         self.running_commands: set[str] = set()
@@ -145,7 +166,22 @@ class CmdorcWidget(Widget):
                 id="commands-list",
             )
 
-            yield self.file_list
+            # Check if watchers are configured
+            watcher_count = self.adapter.get_watcher_count()
+
+            if watcher_count > 0:
+                # Show status line only if watchers configured
+                with Vertical():
+                    self.watcher_status = WatcherStatusLine(
+                        watcher_count=watcher_count,
+                        enabled=True,  # Start enabled
+                    )
+                    yield self.watcher_status
+                    yield self.file_list
+            else:
+                # No watchers - just show command list
+                self.watcher_status = None
+                yield self.file_list
 
         except Exception as e:
             # Fatal config error
@@ -404,6 +440,35 @@ class CmdorcWidget(Widget):
                 adapter=self.adapter,
             )
             self.app.push_screen(screen)
+
+    def on_watcher_status_line_toggled(self, event: WatcherStatusLine.Toggled) -> None:
+        """Handle click on watcher status line - toggle watchers.
+
+        Args:
+            event: WatcherStatusLine.Toggled message
+        """
+        if not self.adapter or not self.watcher_status:
+            return
+
+        # Toggle watchers based on current state
+        if self.adapter.are_watchers_enabled():
+            success = self.adapter.disable_watchers()
+            if success:
+                logger.info("File watchers disabled by user")
+                self.watcher_status.set_enabled(False)
+        else:
+            success = self.adapter.enable_watchers()
+            if success:
+                logger.info("File watchers enabled by user")
+                self.watcher_status.set_enabled(True)
+
+    async def action_toggle_watchers(self) -> None:
+        """Toggle file watchers on/off (keyboard shortcut)."""
+        if not self.adapter or not self.watcher_status:
+            return
+
+        # Simulate click on status line (reuses same logic)
+        self.watcher_status.post_message(WatcherStatusLine.Toggled())
 
     # ========================================================================
     # Lifecycle Callbacks (from OrchestratorAdapter)

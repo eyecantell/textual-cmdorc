@@ -107,15 +107,8 @@ class OrchestratorAdapter:
             self._wire_lifecycle_callbacks(cmd_name)
 
         # Start file watchers if enabled
-        if self._enable_watchers and self._watchers and _WATCHDOG_AVAILABLE:
-            try:
-                self._watcher_manager = FileWatcherManager(self.orchestrator, loop)
-                for watcher_config in self._watchers:
-                    self._watcher_manager.add_watch(watcher_config)
-                self._watcher_manager.start()
-            except Exception as e:
-                logger.error(f"Failed to start file watchers: {e}")
-                self._watcher_manager = None
+        if self._enable_watchers:
+            self._start_watchers()
 
         logger.debug("Adapter attached to event loop")
 
@@ -125,16 +118,104 @@ class OrchestratorAdapter:
         Should be called during cleanup (e.g., on_unmount()).
         """
         # Stop file watchers
-        if self._watcher_manager:
-            try:
-                self._watcher_manager.stop()
-            except Exception as e:
-                logger.error(f"Failed to stop file watchers: {e}")
-            self._watcher_manager = None
+        self._stop_watchers()
 
         self._is_attached = False
         self._loop = None
         logger.debug("Adapter detached from event loop")
+
+    # ========================================================================
+    # File Watcher Management
+    # ========================================================================
+
+    def _start_watchers(self) -> bool:
+        """Initialize and start file watchers (called once during attach).
+
+        Returns:
+            True if watchers started successfully, False otherwise.
+        """
+        if self._watcher_manager:
+            logger.warning("Watchers already initialized")
+            return False
+
+        if not self._watchers or not _WATCHDOG_AVAILABLE:
+            logger.info("No watchers to start")
+            return False
+
+        try:
+            self._watcher_manager = FileWatcherManager(self.orchestrator, self._loop)
+            for watcher_config in self._watchers:
+                self._watcher_manager.add_watch(watcher_config)
+            self._watcher_manager.start()
+            logger.info(f"Started {len(self._watchers)} file watcher(s)")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start watchers: {e}")
+            self._watcher_manager = None
+            return False
+
+    def _stop_watchers(self) -> None:
+        """Stop and cleanup file watchers (called during detach)."""
+        if self._watcher_manager:
+            try:
+                self._watcher_manager.stop()
+            except Exception as e:
+                logger.error(f"Failed to stop watchers: {e}")
+            self._watcher_manager = None
+
+    def enable_watchers(self) -> bool:
+        """Enable file watcher triggers.
+
+        Watchers continue running but now fire trigger events.
+
+        Returns:
+            True if watchers were enabled, False if no watchers configured.
+        """
+        if not self._watcher_manager:
+            logger.warning("No watchers configured")
+            return False
+
+        try:
+            self._watcher_manager.enable()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to enable watchers: {e}")
+            return False
+
+    def disable_watchers(self) -> bool:
+        """Disable file watcher triggers.
+
+        Watchers continue running but do not fire trigger events.
+
+        Returns:
+            True if watchers were disabled, False if no watchers configured.
+        """
+        if not self._watcher_manager:
+            logger.warning("No watchers configured")
+            return False
+
+        try:
+            self._watcher_manager.disable()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to disable watchers: {e}")
+            return False
+
+    def are_watchers_enabled(self) -> bool:
+        """Check if file watcher triggers are enabled.
+
+        Returns:
+            True if watchers are enabled, False otherwise.
+        """
+        return self._watcher_manager is not None and self._watcher_manager.is_enabled()
+
+    def get_watcher_count(self) -> int:
+        """Get number of configured file watchers.
+
+        Returns:
+            Number of file watchers configured in TOML.
+        """
+        return len(self._watchers)
 
     def _wire_lifecycle_callbacks(self, command_name: str) -> None:
         """Wire all registered callbacks for a command to orchestrator.

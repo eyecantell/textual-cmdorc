@@ -11,6 +11,7 @@ from textual_cmdorc.logging import (
     get_logger,
     setup_logging,
 )
+from textual_cmdorc.watcher_status_line import WatcherStatusLine
 
 __all__ = [
     "__version__",
@@ -18,6 +19,7 @@ __all__ = [
     "CmdorcApp",  # Standalone app with Header/Footer
     "CmdorcWidget",  # Composable widget for embedding
     "OrchestratorAdapter",  # Framework-agnostic backend
+    "WatcherStatusLine",  # File watcher status widget
     # Logging utilities
     "setup_logging",
     "disable_logging",

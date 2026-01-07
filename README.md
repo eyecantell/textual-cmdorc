@@ -35,6 +35,10 @@ A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmd
 - ⌨️ **Global Keyboard Shortcuts**: Configurable hotkeys (1-9, a-z, f1-f12) to run/stop commands
 - 🎯 **Help Screen**: Press `[h]` to see all keyboard shortcuts
 - 🔄 **Live Reload**: Press `[r]` to reload configuration without restarting
+- 👁️ **File Watcher Toggle**: Press `[w]` or click status line to enable/disable file watchers
+  - Status line shows: `👁️  File Watchers (N) Enabled` or `✗ File Watchers Disabled`
+  - Watchers stay running but triggers are disabled when off
+  - Useful when making bulk file changes without triggering commands
 
 ### Embedding & Extensibility
 - 🔗 **Embeddable Widget**: Use CmdorcWidget in multi-column layouts or complex UIs
@@ -371,6 +375,10 @@ asyncio.run(main())
 - `run_command(name: str)` - Async command execution
 - `cancel_command(name: str)` - Async command cancellation
 - `get_command_names()` - Get all command names in TOML order
+- `enable_watchers()` - Enable file watcher triggers
+- `disable_watchers()` - Disable file watcher triggers
+- `are_watchers_enabled()` - Check if watcher triggers are enabled
+- `get_watcher_count()` - Get number of configured watchers
 - `on_command_success(name: str, callback: Callable)` - Register success callback
 - `on_command_failed(name: str, callback: Callable)` - Register failure callback
 - `on_command_cancelled(name: str, callback: Callable)` - Register cancellation callback
@@ -449,12 +457,13 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 - ✅ Real-time status updates (icons, tooltips)
 - ✅ Keyboard shortcuts (configurable, conflict detection)
 - ✅ File watchers (watchdog integration)
+- ✅ File watcher toggle (enable/disable triggers on-the-fly)
 - ✅ Help screen (modal with shortcuts)
 - ✅ Command details modal (comprehensive command information)
 - ✅ Config reload (live without restart)
 - ✅ CLI with auto-config generation
 - ✅ Logging infrastructure (file-based, silent by default)
-- ✅ 188 passing tests (73% coverage)
+- ✅ 200 passing tests (75% coverage)
 
 ### Known Limitations
 - No log pane (use terminal output instead)
@@ -466,8 +475,10 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 MIT License. See [LICENSE](LICENSE) for details.
 
 ## Todo
-- Add initial run support (create cmdorc.toml, make sure command for opening editor is set)
+- Add ability to turn on/off file watchers
 - Add support for multiple (named) config files, also fix reload
+- Add ability to configure editor command
+- Add initial run support (create cmdorc.toml)
 - Add watcher to auto-load the in use config if it changes?
 
 ## Contributing

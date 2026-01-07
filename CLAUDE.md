@@ -70,6 +70,7 @@ Two-layer widget architecture for maximum flexibility:
 - **cmdorc_app.py** - Contains both:
   - `CmdorcWidget`: Composable widget for embedding in multi-panel layouts
   - `CmdorcApp`: Thin standalone wrapper (adds Header/Footer to CmdorcWidget)
+- **watcher_status_line.py** - `WatcherStatusLine`: Widget for toggling file watchers on/off
 - **cli.py** - Command-line interface with auto-config generation and logging configuration
 - **logging.py** - Logging utilities for debugging (`setup_logging()`, `disable_logging()`, `get_log_file_path()`)
 - **tooltip_builders.py** - `TooltipBuilder`: Constructs all tooltip content (status, play/stop, output)
@@ -102,6 +103,20 @@ This supports both standalone use (90% of cases) and clean embedding in larger T
 - UI callbacks (button clicks, keyboard input) use `request_run(name)` / `request_cancel(name)` (sync-safe)
 - These methods schedule async tasks on the stored event loop
 - Pure async methods (`run_command()`, `cancel_command()`) are available for async contexts
+
+### File Watcher Toggle Architecture
+- **Lightweight toggle** - File watchers stay running, only trigger firing is toggled
+- **`FileWatcherManager._enabled` flag** - Controls whether triggers fire
+- **No observer restart** - Avoids heavyweight stop/start operations
+- **UI components:**
+  - `WatcherStatusLine` widget - Shows state and handles clicks
+  - Appears above command list only if watchers configured
+  - Keyboard shortcut 'w' to toggle
+- **API methods:**
+  - `adapter.enable_watchers()` - Enable trigger firing
+  - `adapter.disable_watchers()` - Disable trigger firing
+  - `adapter.are_watchers_enabled()` - Check state
+- **Use case:** Disable triggers when making bulk file changes without triggering commands
 
 ## High-Level Data Flow
 
@@ -257,7 +272,7 @@ logging.basicConfig(level=logging.DEBUG)  # Standard Python logging
 
 ## Testing Strategy
 
-Current: **188 tests, 73% coverage** (includes command details modal and logging)
+Current: **200 tests, 75% coverage** (includes command details modal, logging, and watcher toggle)
 
 ### Test Organization
 - **tests/conftest.py** - Fixtures (mock orchestrator, adapter, app)
@@ -268,6 +283,7 @@ Current: **188 tests, 73% coverage** (includes command details modal and logging
 - **tests/test_logging.py** - Logging utilities (setup, disable, file creation, rotation)
 - **tests/test_models.py** - Config parsing, TriggerSource, KeyboardConfig
 - **tests/test_tooltip_builders.py** - Tooltip content builders
+- **tests/test_watcher_status_line.py** - WatcherStatusLine widget (7 tests, 100% coverage)
 
 ### Running Tests
 ```bash
@@ -289,6 +305,7 @@ pdm run pytest --cov --cov-report=html
 
 | File | Purpose | Key Classes |
 | **src/textual_cmdorc/cmdorc_app.py** | Widget + App architecture | `CmdorcWidget`, `CmdorcApp`, `HelpScreen` |
+| **src/textual_cmdorc/watcher_status_line.py** | File watcher toggle widget | `WatcherStatusLine` |
 | **src/textual_cmdorc/details_screen.py** | Command details modal | `CommandDetailsScreen` |
 | **src/textual_cmdorc/logging.py** | Logging utilities | `setup_logging()`, `disable_logging()`, `get_log_file_path()` |
 | **src/textual_cmdorc/tooltip_builders.py** | Tooltip content builders | `TooltipBuilder` |
@@ -296,8 +313,9 @@ pdm run pytest --cov --cov-report=html
 | **src/cmdorc_frontend/orchestrator_adapter.py** | Framework-agnostic backend | `OrchestratorAdapter` |
 | **src/cmdorc_frontend/config.py** | Parse TOML, build hierarchy | `load_frontend_config()` |
 | **src/cmdorc_frontend/models.py** | Core dataclasses | `CommandNode`, `TriggerSource`, `KeyboardConfig` |
-| **src/cmdorc_frontend/file_watcher.py** | Watchdog integration | `FileWatcherManager` |
+| **src/cmdorc_frontend/file_watcher.py** | Watchdog integration | `FileWatcherManager` (with enable/disable) |
 | **src/textual_cmdorc/cli.py** | Command-line interface | `main()`, `create_default_config()` |
+| **tests/test_watcher_status_line.py** | Watcher toggle tests | 7 tests, 100% coverage |
 | **tests/test_logging.py** | Logging tests | 26 tests, 79% coverage |
 | **tests/test_details_screen.py** | Details modal tests | 20 tests, 71% coverage |
 | **architecture.md** | Full design reference | Simplified design decisions |
@@ -342,6 +360,12 @@ widget = CmdorcWidget("config.toml")
 # Disable logging for tests
 from textual_cmdorc import disable_logging
 disable_logging()  # Silent operation
+
+# Toggle file watchers programmatically
+adapter.disable_watchers()  # Disable triggers (watchers still run)
+adapter.enable_watchers()   # Re-enable triggers
+if adapter.are_watchers_enabled():
+    print("Watchers are enabled")
 ```
 
 ### ✗ Anti-Patterns to Avoid
