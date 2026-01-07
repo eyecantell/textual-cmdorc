@@ -326,7 +326,8 @@ class TestDefaultConfigTemplate:
         """Test that template has [[file_watcher]] section."""
         assert "[[file_watcher]]" in DEFAULT_CONFIG_TEMPLATE
         assert 'dir = "."' in DEFAULT_CONFIG_TEMPLATE
-        assert 'patterns = ["**/*.py"]' in DEFAULT_CONFIG_TEMPLATE
+        assert 'extensions = [".py"]' in DEFAULT_CONFIG_TEMPLATE
+        assert "recursive = true" in DEFAULT_CONFIG_TEMPLATE
         assert 'trigger = "py_file_changed"' in DEFAULT_CONFIG_TEMPLATE
 
     def test_template_has_command_sections(self):
@@ -371,4 +372,5 @@ class TestDefaultConfigTemplate:
 
             # Verify watcher config
             assert watchers[0].trigger == "py_file_changed"
-            assert "**/*.py" in (watchers[0].patterns or [])
+            assert ".py" in (watchers[0].extensions or [])
+            assert watchers[0].recursive is True

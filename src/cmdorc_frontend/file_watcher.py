@@ -7,7 +7,7 @@ from threading import Timer
 
 from cmdorc import CommandOrchestrator
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
-from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 from cmdorc_frontend.watchers import WatcherConfig
 
@@ -23,7 +23,6 @@ class _DebouncedHandler(FileSystemEventHandler):
         orchestrator: CommandOrchestrator,
         loop: asyncio.AbstractEventLoop,
         debounce_ms: int,
-        patterns: list[str] | None = None,
         extensions: list[str] | None = None,
         ignore_dirs: list[str] | None = None,
     ):
@@ -34,15 +33,13 @@ class _DebouncedHandler(FileSystemEventHandler):
             orchestrator: CommandOrchestrator instance
             loop: Event loop for scheduling
             debounce_ms: Debounce delay in milliseconds
-            patterns: Optional glob patterns to match
-            extensions: Optional extensions to match
+            extensions: Optional file extensions to match (e.g., [".py", ".txt"])
             ignore_dirs: Optional directory names to ignore
         """
         self.trigger_name = trigger_name
         self.orchestrator = orchestrator
         self.loop = loop
         self.debounce_ms = debounce_ms
-        self.patterns = patterns
         self.extensions = extensions
         self.ignore_dirs = ignore_dirs or []
         self._timer: Timer | None = None
@@ -73,25 +70,7 @@ class _DebouncedHandler(FileSystemEventHandler):
                 return False
             logger.debug(f"  ✓ Extension check: PASS ({path.suffix})")
 
-        # Check patterns if specified (simple suffix matching)
-        if self.patterns:
-            matched = False
-            for pattern in self.patterns:
-                # Simple pattern matching - just check if path ends with pattern suffix
-                if pattern.startswith("**/*"):
-                    suffix = pattern[4:]  # Remove "**/*"
-                    if path.name.endswith(suffix):
-                        matched = True
-                        logger.debug(f"  ✓ Pattern check: PASS (matches {pattern})")
-                        break
-                elif pattern.startswith("*."):
-                    if path.suffix == pattern[1:]:
-                        matched = True
-                        logger.debug(f"  ✓ Pattern check: PASS (matches {pattern})")
-                        break
-            if not matched:
-                logger.debug(f"  ❌ Pattern check: No match for patterns {self.patterns}")
-                return False
+        # Pattern matching REMOVED - using extensions only
 
         logger.debug(f"  ✅ All filters PASSED for {path}")
         return True
@@ -149,8 +128,53 @@ class FileWatcherManager:
         """
         self.orchestrator = orchestrator
         self.loop = loop
-        self.observer = Observer()
+        self.observer = PollingObserver(timeout=1.0)
         self.handlers: list[_DebouncedHandler] = []
+
+    def _discover_directories(self, root: Path, ignore_dirs: list[str] | None) -> list[Path]:
+        """Recursively discover all subdirectories, respecting ignore_dirs.
+
+        Args:
+            root: Root directory to start discovery
+            ignore_dirs: Directory names to skip
+
+        Returns:
+            List of all discoverable directories (including root)
+        """
+        directories = [root]
+        ignore_set = set(ignore_dirs or [])
+
+        def should_ignore(path: Path) -> bool:
+            """Check if directory should be ignored."""
+            # Check each part of the path relative to root
+            try:
+                rel_path = path.relative_to(root)
+                # Check if any component of the relative path is in ignore_set
+                for part in rel_path.parts:
+                    if part in ignore_set:
+                        return True
+            except ValueError:
+                # path is not relative to root
+                pass
+            return False
+
+        try:
+            for item in root.rglob("*"):
+                if not item.is_dir():
+                    continue
+
+                # Skip if this directory or any parent should be ignored
+                if should_ignore(item):
+                    logger.debug(f"Skipping ignored directory: {item}")
+                    continue
+
+                directories.append(item)
+
+        except PermissionError as e:
+            logger.warning(f"Permission denied accessing {root}: {e}")
+
+        logger.debug(f"Discovered {len(directories)} directories after filtering")
+        return directories
 
     def add_watch(self, config: WatcherConfig) -> None:
         """Add a file watcher.
@@ -162,24 +186,41 @@ class FileWatcherManager:
             logger.warning(f"Watcher directory does not exist: {config.dir}")
             return
 
-        # Create debounced handler
+        # Discover directories to watch
+        if config.recursive:
+            directories = self._discover_directories(config.dir, config.ignore_dirs)
+            logger.info(f"Discovered {len(directories)} directories to watch (recursive mode)")
+            logger.debug(f"Watching directories: {[str(d) for d in directories]}")
+        else:
+            directories = [config.dir]
+            logger.info("Watching single directory (non-recursive mode)")
+
+        # Create one handler for all directories (shared trigger)
         handler = _DebouncedHandler(
             trigger_name=config.trigger,
             orchestrator=self.orchestrator,
             loop=self.loop,
             debounce_ms=config.debounce_ms,
-            patterns=config.patterns,
             extensions=config.extensions,
             ignore_dirs=config.ignore_dirs,
         )
 
-        # Schedule watch
-        self.observer.schedule(handler, str(config.dir), recursive=True)
+        # Schedule watch for each directory (recursive=False for each)
+        for directory in directories:
+            watch_path = str(directory)
+            self.observer.schedule(handler, watch_path, recursive=False)
+            logger.debug(f"Scheduled watch: {watch_path} (recursive=False)")
+
         self.handlers.append(handler)
 
-        logger.info(f"Watching {config.dir} for '{config.trigger}' (debounce: {config.debounce_ms}ms)")
+        logger.info(
+            f"Watching '{config.trigger}' - "
+            f"{len(directories)} dir(s), "
+            f"extensions: {config.extensions}, "
+            f"debounce: {config.debounce_ms}ms"
+        )
         logger.debug(
-            f"Watch config - Recursive: True, Patterns: {config.patterns}, "
+            f"Watch config - Recursive: {config.recursive}, "
             f"Extensions: {config.extensions}, Ignore: {config.ignore_dirs}"
         )
 

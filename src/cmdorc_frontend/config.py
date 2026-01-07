@@ -54,11 +54,11 @@ def load_frontend_config(
     watchers = [
         WatcherConfig(
             dir=path.parent / Path(w["dir"]),
-            patterns=w.get("patterns"),
             extensions=w.get("extensions"),
             ignore_dirs=w.get("ignore_dirs", ["__pycache__", ".git"]),
             trigger=w["trigger"],
             debounce_ms=w.get("debounce_ms", 300),
+            recursive=w.get("recursive", True),
         )
         for w in raw.get("file_watcher", [])
     ]

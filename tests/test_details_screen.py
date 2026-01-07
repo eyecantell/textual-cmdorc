@@ -61,7 +61,8 @@ def mock_adapter(mock_orchestrator, tmp_path):
     # Mock watchers
     watcher = Mock()
     watcher.dir = Path("./src")
-    watcher.patterns = ["**/*.py"]
+    watcher.extensions = [".py"]
+    watcher.recursive = True
     watcher.trigger = "py_file_changed"
     watcher.debounce_ms = 300
     adapter._watchers = [watcher]
@@ -352,7 +353,8 @@ def test_build_config_section_with_watchers(details_screen, mock_orchestrator, m
     # Verify
     assert "File watchers" in result
     assert "src" in result  # Path shown without ./ prefix
-    assert "**/*.py" in result
+    assert ".py" in result  # extensions instead of patterns
+    assert "recursive: true" in result
     assert "py_file_changed" in result
     assert "300ms" in result
 

@@ -12,11 +12,8 @@ class WatcherConfig:
     dir: Path
     """Directory to watch."""
 
-    patterns: list[str] | None = None
-    """Include patterns (glob style)."""
-
     extensions: list[str] | None = None
-    """Include extensions (fallback if patterns not specified)."""
+    """File extensions to watch (e.g., [".py", ".txt"])."""
 
     ignore_dirs: list[str] | None = None
     """Directories to ignore."""
@@ -26,6 +23,9 @@ class WatcherConfig:
 
     debounce_ms: int = 300
     """Debounce delay in milliseconds."""
+
+    recursive: bool = True
+    """Recursively watch subdirectories (default: True)."""
 
 
 class TriggerSourceWatcher(Protocol):

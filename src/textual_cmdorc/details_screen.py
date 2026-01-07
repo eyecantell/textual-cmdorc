@@ -535,12 +535,15 @@ class CommandDetailsScreen(ModalScreen):
             relevant_watchers = [w for w in self.adapter._watchers if w.trigger in config.triggers]
 
             if relevant_watchers:
-                lines.append("", "File watchers:")
+                lines.append("")
+                lines.append("File watchers:")
                 for watcher in relevant_watchers:
                     lines.append(f"  • dir: {watcher.dir}")
-                    if watcher.patterns:
-                        patterns_str = ", ".join(watcher.patterns)
-                        lines.append(f"    patterns: {patterns_str}")
+                    if watcher.extensions:
+                        extensions_str = ", ".join(watcher.extensions)
+                        lines.append(f"    extensions: {extensions_str}")
+                    if watcher.recursive:
+                        lines.append("    recursive: true")
                     lines.append(f"    trigger: {watcher.trigger}")
                     lines.append(f"    debounce: {watcher.debounce_ms}ms")
 

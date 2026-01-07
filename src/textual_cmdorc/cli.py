@@ -16,7 +16,8 @@ base_dir = "."
 
 [[file_watcher]]
 dir = "."
-patterns = ["**/*.py"]
+extensions = [".py"]
+recursive = true
 trigger = "py_file_changed"
 debounce_ms = 300
 ignore_dirs = ["__pycache__", ".git", "venv", ".venv"]
