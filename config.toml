@@ -32,6 +32,7 @@ name = "Tests"
 command = "pdm run pytest {{ base_dir }}/tests"
 triggers = ["command_success:Format"]
 
+
 [keyboard]
 shortcuts = { Lint = "1", Format = "2", Tests = "3" }
 enabled = true

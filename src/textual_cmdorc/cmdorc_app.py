@@ -805,6 +805,9 @@ class CmdorcApp(App):
             self.notify("Widget not initialized", severity="warning")
             return
 
+        # Notify user that reload has started
+        self.notify("Reloading configuration...", severity="information")
+
         success, message = await self.cmdorc_widget.reload_config()
         if success:
             self.notify(message, severity="information")
