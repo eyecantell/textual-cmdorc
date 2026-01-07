@@ -192,7 +192,7 @@ Run `cmdorc-tui` without a config file to auto-generate a starter config.
 By default, cmdorc-tui runs silently (no logging). Enable file-based logging for debugging:
 
 ```bash
-# Enable file logging (writes to ~/.cmdorc/logs/cmdorc-tui.log)
+# Enable file logging (writes to .cmdorc/logs/cmdorc-tui.log)
 cmdorc-tui --log-file
 
 # With specific log level
@@ -211,7 +211,7 @@ cmdorc-tui -v
 - `WARNING` - Non-critical issues
 - `ERROR` - Failures and exceptions
 
-**Log Location:** `~/.cmdorc/logs/cmdorc-tui.log`
+**Log Location:** `.cmdorc/logs/cmdorc-tui.log`
 - Rotating log files (10MB max, 5 backups)
 - Automatically creates directory if needed
 
@@ -252,7 +252,7 @@ cmdorc-tui
 cmdorc-tui --log-file
 
 # View the log file in real-time
-tail -f ~/.cmdorc/logs/cmdorc-tui.log
+tail -f .cmdorc/logs/cmdorc-tui.log
 ```
 
 ### Common Issues
@@ -383,7 +383,7 @@ from textual_cmdorc import setup_logging, disable_logging, get_log_file_path
 # Configure logging
 setup_logging(
     level="DEBUG",           # Logging level (default: DEBUG)
-    log_dir="~/.cmdorc/logs", # Log directory (default)
+    log_dir=".cmdorc/logs",  # Log directory (default)
     log_filename="cmdorc-tui.log",  # Log file name (default)
     max_bytes=10 * 1024 * 1024,  # Max file size before rotation (default: 10MB)
     backup_count=5,          # Number of backup files (default: 5)

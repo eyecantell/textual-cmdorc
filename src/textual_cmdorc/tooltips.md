@@ -191,7 +191,7 @@ No output available yet
 ```
 Lint
 
-Open: /home/user/.cmdorc/outputs/Lint/run-abc123/output.txt
+Open: .cmdorc/outputs/Lint/run-abc123/output.txt
 
 Last 5 lines:
 ────────────────────────────────────────
@@ -223,7 +223,7 @@ Click to open in editor
 ```
 Lint
 
-Open: /home/user/.cmdorc/outputs/Lint/run-abc123/output.txt
+Open: .cmdorc/outputs/Lint/run-abc123/output.txt
 
 [242 lines - click to open in editor]
 ```

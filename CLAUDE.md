@@ -201,12 +201,12 @@ cmdorc-tui -v                        # Alias for --log-file (backward compat)
 from textual_cmdorc import setup_logging, disable_logging, get_log_file_path
 
 # Enable file logging for debugging
-setup_logging()  # Defaults: DEBUG level, ~/.cmdorc/logs/cmdorc-tui.log
+setup_logging()  # Defaults: DEBUG level, .cmdorc/logs/cmdorc-tui.log
 
 # Configure with options
 setup_logging(
     level="INFO",
-    log_dir="~/.cmdorc/logs",
+    log_dir=".cmdorc/logs",
     log_filename="my-app.log",
     log_all=True,  # Also log cmdorc + textual-filelink
 )
@@ -238,7 +238,7 @@ INFO:textual_cmdorc.orchestrator:Command started: Lint
 ### Log Rotation
 - **Max file size**: 10MB (configurable via `max_bytes`)
 - **Backup count**: 5 files (configurable via `backup_count`)
-- **Default location**: `~/.cmdorc/logs/cmdorc-tui.log`
+- **Default location**: `.cmdorc/logs/cmdorc-tui.log`
 
 ### When Embedding CmdorcWidget
 Enable logging before creating widgets:

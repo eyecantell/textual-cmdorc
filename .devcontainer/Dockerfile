@@ -57,3 +57,6 @@ RUN pip install --no-cache-dir \
     twine
 
 RUN git config --global --add safe.directory /mounted/dev/textual-cmdorc
+
+
+RUN echo "alias upc='sudo npm i -g @anthropic-ai/claude-code'" >> /home/developer/.bash_aliases

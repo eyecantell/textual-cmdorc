@@ -84,7 +84,7 @@ def parse_args() -> argparse.Namespace:
         epilog="Examples:\n"
         "  cmdorc-tui                         # Auto-create config.toml and launch\n"
         "  cmdorc-tui --config my-flow.toml   # Use custom config\n"
-        "  cmdorc-tui --log-file              # Enable logging to ~/.cmdorc/logs/cmdorc-tui.log\n"
+        "  cmdorc-tui --log-file              # Enable logging to .cmdorc/logs/cmdorc-tui.log\n"
         "  cmdorc-tui --log-file --log-all    # Log all packages (cmdorc, textual-filelink)\n"
         "  cmdorc-tui --version               # Show version",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -106,7 +106,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--log-file",
         action="store_true",
-        help="Enable logging to ~/.cmdorc/logs/cmdorc-tui.log",
+        help="Enable logging to .cmdorc/logs/cmdorc-tui.log",
     )
 
     parser.add_argument(
