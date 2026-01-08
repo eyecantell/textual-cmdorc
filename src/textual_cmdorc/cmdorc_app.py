@@ -8,6 +8,10 @@ Enhanced with rich tooltips showing:
 - Play/Stop button: Trigger conditions and chains
 - Command name: Output file preview (last 5 lines)
 
+Multi-config support:
+- ConfigSwitcher: Dropdown for switching between named configs
+- FileSeparator: Visual separator showing command source files
+
 Architecture:
 - CmdorcWidget: Composable widget for embedding in other apps
 - CmdorcApp: Standalone app wrapping CmdorcWidget with Header/Footer
@@ -27,9 +31,12 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Static
 from textual_filelink import CommandLink, FileLinkList, sanitize_id
 
+from cmdorc_frontend.multiconfig import ConfigSet
 from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
 
+from .config_switcher import ConfigSwitcher
 from .details_screen import CommandDetailsScreen
+from .file_separator import FileSeparator
 from .tooltip_builders import TooltipBuilder
 from .watcher_status_line import WatcherStatusLine
 
@@ -104,6 +111,20 @@ class CmdorcWidget(Widget):
         width: 1fr;
     }
 
+    ConfigSwitcher {
+        height: 1;
+        width: 100%;
+        dock: top;
+        padding: 0 1;
+        border-bottom: solid $accent;
+        background: $surface;
+        color: $text;
+    }
+
+    ConfigSwitcher:hover {
+        background: $surface-darken-1;
+    }
+
     WatcherStatusLine {
         height: 1;
         width: 100%;
@@ -119,6 +140,14 @@ class CmdorcWidget(Widget):
         background: $panel;
     }
 
+    FileSeparator {
+        height: 1;
+        width: 100%;
+        color: $text-muted;
+        text-style: bold;
+        padding: 0 1;
+    }
+
     FileLinkList {
         height: 1fr;
         border: solid $accent;
@@ -132,20 +161,68 @@ class CmdorcWidget(Widget):
 
     BINDINGS = [
         Binding("w", "toggle_watchers", "Toggle file watchers", show=False),
+        Binding("ctrl+k", "cycle_config", "Switch config", show=False),
     ]
 
-    def __init__(self, config_path: str = "config.toml", **kwargs):
+    def __init__(
+        self,
+        config_path: str | Path | None = None,
+        config_paths: list[str | Path] | None = None,
+        config_set: ConfigSet | None = None,
+        active_config_name: str | None = None,
+        **kwargs,
+    ):
         """Initialize widget.
 
         Args:
-            config_path: Path to TOML config file
+            config_path: Path to single TOML config file (backward compatible)
+            config_paths: List of TOML config files to merge (multi-config)
+            config_set: ConfigSet for named multi-config mode
+            active_config_name: Active config name (when using config_set)
         """
         super().__init__(**kwargs)
-        self.config_path = Path(config_path)
+
+        # Store multi-config state
+        self.config_set = config_set
+        self.active_config_name = active_config_name
+
+        # Resolve config paths
+        if config_paths is not None:
+            self.config_paths = [Path(p) for p in config_paths]
+        elif config_path is not None:
+            self.config_paths = [Path(config_path)]
+        elif config_set and active_config_name:
+            named_config = config_set.get_config_by_name(active_config_name)
+            if named_config:
+                self.config_paths = named_config.get_all_paths()
+            else:
+                # Fall back to default config
+                default = config_set.get_default_config()
+                if default:
+                    self.config_paths = default.get_all_paths()
+                    self.active_config_name = default.name
+                else:
+                    self.config_paths = []
+        elif config_set:
+            # Use default config from config_set
+            default = config_set.get_default_config()
+            if default:
+                self.config_paths = default.get_all_paths()
+                self.active_config_name = default.name
+            else:
+                self.config_paths = []
+        else:
+            # Default to config.toml for backward compatibility
+            self.config_paths = [Path("config.toml")]
+
+        # Keep config_path for backward compatibility
+        self.config_path = self.config_paths[0] if self.config_paths else Path("config.toml")
+
         self.adapter: OrchestratorAdapter | None = None
         self.file_list: FileLinkList | None = None
         self.tooltip_builder: TooltipBuilder | None = None
         self.watcher_status: WatcherStatusLine | None = None
+        self.config_switcher: ConfigSwitcher | None = None
 
         # Track running commands for state management
         self.running_commands: set[str] = set()
@@ -154,7 +231,10 @@ class CmdorcWidget(Widget):
         """Compose widget layout."""
         try:
             # Create adapter (loads config, creates orchestrator)
-            self.adapter = OrchestratorAdapter(self.config_path)
+            if len(self.config_paths) == 1:
+                self.adapter = OrchestratorAdapter(config_path=self.config_paths[0])
+            else:
+                self.adapter = OrchestratorAdapter(config_paths=self.config_paths)
 
             # Create tooltip builder
             self.tooltip_builder = TooltipBuilder(self.adapter)
@@ -169,18 +249,30 @@ class CmdorcWidget(Widget):
             # Check if watchers are configured
             watcher_count = self.adapter.get_watcher_count()
 
-            if watcher_count > 0:
-                # Show status line only if watchers configured
-                with Vertical():
+            # Check if we should show config switcher (multi-config with 2+ configs)
+            show_switcher = (
+                self.config_set is not None and len(self.config_set.configs) > 1 and self.active_config_name is not None
+            )
+
+            with Vertical():
+                # Config switcher (only if multi-config with 2+ configs)
+                if show_switcher:
+                    self.config_switcher = ConfigSwitcher(
+                        config_names=self.config_set.get_config_names(),
+                        active_name=self.active_config_name,
+                    )
+                    yield self.config_switcher
+
+                # Watcher status line (only if watchers configured)
+                if watcher_count > 0:
                     self.watcher_status = WatcherStatusLine(
                         watcher_count=watcher_count,
                         enabled=True,  # Start enabled
                     )
                     yield self.watcher_status
-                    yield self.file_list
-            else:
-                # No watchers - just show command list
-                self.watcher_status = None
+                else:
+                    self.watcher_status = None
+
                 yield self.file_list
 
         except Exception as e:
@@ -203,7 +295,18 @@ class CmdorcWidget(Widget):
             if self.file_list is not None:
                 cmd_names = self.adapter.get_command_names()
 
+                # Track current source file for separators (multi-config only)
+                current_source: Path | None = None
+                show_separators = len(self.config_paths) > 1
+
                 for cmd_name in cmd_names:
+                    # Add file separator if source changed (multi-config mode)
+                    if show_separators:
+                        cmd_source = self.adapter.get_command_source(cmd_name)
+                        if cmd_source and cmd_source != current_source:
+                            current_source = cmd_source
+                            separator = FileSeparator(cmd_source.name)
+                            self.file_list.add_item(separator)
                     try:
                         # Check if there's a historical run with output file
                         status = self.adapter.orchestrator.get_status(cmd_name)
@@ -470,6 +573,45 @@ class CmdorcWidget(Widget):
         # Simulate click on status line (reuses same logic)
         self.watcher_status.post_message(WatcherStatusLine.Toggled())
 
+    def on_config_switcher_config_selected(self, event: ConfigSwitcher.ConfigSelected) -> None:
+        """Handle config switcher selection.
+
+        Args:
+            event: ConfigSwitcher.ConfigSelected message
+        """
+        logger.info(f"Config selected: {event.config_name}")
+        asyncio.create_task(self._switch_config(event.config_name))
+
+    async def action_cycle_config(self) -> None:
+        """Cycle to next config (keyboard shortcut Ctrl+K)."""
+        if self.config_switcher:
+            self.config_switcher.cycle_next()
+
+    async def _switch_config(self, config_name: str) -> None:
+        """Switch to a different named config.
+
+        Args:
+            config_name: Name of the config to switch to
+        """
+        if not self.config_set:
+            logger.warning("Cannot switch config - no ConfigSet available")
+            return
+
+        named_config = self.config_set.get_config_by_name(config_name)
+        if not named_config:
+            logger.error(f"Config not found: {config_name}")
+            return
+
+        logger.info(f"Switching to config: {config_name}")
+
+        # Update state
+        self.active_config_name = config_name
+        self.config_paths = named_config.get_all_paths()
+        self.config_path = self.config_paths[0] if self.config_paths else self.config_path
+
+        # Reload with new config
+        await self.reload_config()
+
     # ========================================================================
     # Lifecycle Callbacks (from OrchestratorAdapter)
     # ========================================================================
@@ -637,8 +779,11 @@ class CmdorcWidget(Widget):
             if self.file_list:
                 await self.file_list.remove()
 
-            # Recreate adapter with new config
-            self.adapter = OrchestratorAdapter(self.config_path)
+            # Recreate adapter with new config (single or multi-config)
+            if len(self.config_paths) == 1:
+                self.adapter = OrchestratorAdapter(config_path=self.config_paths[0])
+            else:
+                self.adapter = OrchestratorAdapter(config_paths=self.config_paths)
 
             # Recreate tooltip builder
             self.tooltip_builder = TooltipBuilder(self.adapter)
@@ -653,8 +798,19 @@ class CmdorcWidget(Widget):
             # Mount new list FIRST
             await self.mount(self.file_list)
 
+            # Track current source file for separators (multi-config only)
+            current_source: Path | None = None
+            show_separators = len(self.config_paths) > 1
+
             # THEN populate it (after mounting)
             for cmd_name in self.adapter.get_command_names():
+                # Add file separator if source changed (multi-config mode)
+                if show_separators:
+                    cmd_source = self.adapter.get_command_source(cmd_name)
+                    if cmd_source and cmd_source != current_source:
+                        current_source = cmd_source
+                        separator = FileSeparator(cmd_source.name)
+                        self.file_list.add_item(separator)
                 try:
                     # Check if there's a historical run with output file
                     status = self.adapter.orchestrator.get_status(cmd_name)

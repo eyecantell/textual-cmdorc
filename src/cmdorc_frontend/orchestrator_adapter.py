@@ -2,10 +2,11 @@
 Reusable frontend adapter for CommandOrchestrator.
 
 Provides a clean, frontend-agnostic interface for:
-- Loading and validating configurations
+- Loading and validating configurations (single or multi-config)
 - Executing commands (run/cancel)
 - Wiring lifecycle callbacks with correct signatures
 - Querying command status
+- Tracking which config file defined each command
 
 This adapter can be used by any frontend (TUI, VSCode, web, etc.)
 without depending on Textual or any UI framework.
@@ -18,7 +19,8 @@ from pathlib import Path
 
 from cmdorc import CommandOrchestrator, RunHandle, load_config
 
-from cmdorc_frontend.config import load_frontend_config
+from cmdorc_frontend.config import load_frontend_config, load_merged_frontend_config
+from cmdorc_frontend.multiconfig import load_configs_with_sources
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +38,20 @@ class OrchestratorAdapter:
     """Frontend-agnostic adapter for CommandOrchestrator.
 
     Handles:
-    - Configuration loading and validation
+    - Configuration loading and validation (single or multi-config)
     - Command execution (run/cancel)
     - Lifecycle callback wiring (with correct signatures)
     - Keyboard configuration
+    - Tracking which config file defined each command
+
+    Usage (Single config - backward compatible):
+        adapter = OrchestratorAdapter(config_path="config.toml")
+
+    Usage (Multi-config):
+        adapter = OrchestratorAdapter(config_paths=["commands.toml", "build.toml"])
 
     Usage (Embedded):
-        adapter = OrchestratorAdapter(config_path)
+        adapter = OrchestratorAdapter(config_path="config.toml")
         loop = asyncio.get_running_loop()
         adapter.attach(loop)
 
@@ -55,23 +64,52 @@ class OrchestratorAdapter:
         adapter.detach()
     """
 
-    def __init__(self, config_path: str | Path, enable_watchers: bool = True):
+    def __init__(
+        self,
+        config_path: str | Path | None = None,
+        config_paths: list[str | Path] | None = None,
+        enable_watchers: bool = True,
+    ):
         """Initialize adapter with configuration.
 
         Args:
-            config_path: Path to TOML config file
+            config_path: Path to single TOML config file (backward compatible)
+            config_paths: List of TOML config files to merge (multi-config mode)
             enable_watchers: Whether to enable file watchers (default: True)
+
+        Raises:
+            ValueError: If neither config_path nor config_paths provided
         """
-        self.config_path = Path(config_path)
+        # Normalize config paths
+        if config_paths is not None:
+            self.config_paths = [Path(p) for p in config_paths]
+        elif config_path is not None:
+            self.config_paths = [Path(config_path)]
+        else:
+            raise ValueError("Must provide either config_path or config_paths")
+
+        # Keep config_path for backward compatibility
+        self.config_path = self.config_paths[0]
+
         self._loop: asyncio.AbstractEventLoop | None = None
         self._enable_watchers = enable_watchers
 
-        # Load configuration
-        runner_config = load_config(self.config_path)
-        self.orchestrator = CommandOrchestrator(runner_config)
+        # Load configuration with source tracking
+        if len(self.config_paths) == 1:
+            # Single config - use original loader for full hierarchy support
+            runner_config = load_config(self.config_paths[0])
+            self._command_sources: dict[str, Path] = {cmd.name: self.config_paths[0] for cmd in runner_config.commands}
+            # Load frontend configuration
+            _, self.keyboard_config, self._watchers, self._hierarchy = load_frontend_config(self.config_paths[0])
+        else:
+            # Multi-config - use merged loader
+            runner_config, self._command_sources = load_configs_with_sources(self.config_paths)
+            # Merge frontend configs
+            self.keyboard_config, self._watchers = load_merged_frontend_config(self.config_paths)
+            # No hierarchy in multi-config mode (flat list only)
+            self._hierarchy = []
 
-        # Load frontend configuration
-        _, self.keyboard_config, self._watchers, self._hierarchy = load_frontend_config(self.config_path)
+        self.orchestrator = CommandOrchestrator(runner_config)
 
         # Track state
         self._is_attached = False
@@ -420,3 +458,14 @@ class OrchestratorAdapter:
             List of command names in the order they appear in config
         """
         return self.orchestrator.list_commands()
+
+    def get_command_source(self, cmd_name: str) -> Path | None:
+        """Get the config file that defined a command.
+
+        Args:
+            cmd_name: Command name
+
+        Returns:
+            Path to the config file that defined this command, or None if not found
+        """
+        return self._command_sources.get(cmd_name)

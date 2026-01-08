@@ -1,8 +1,12 @@
 """Shared data models for cmdorc_frontend."""
 
+import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 try:
     from cmdorc import CommandConfig, RunState
@@ -205,3 +209,80 @@ def map_run_state_to_icon(state: "RunState") -> str:
         return "⏳"
     else:
         return "❓"  # PENDING or unknown state
+
+
+@dataclass
+class UserSettings:
+    """Persisted user preferences.
+
+    Stores settings in .cmdorc/settings.json, including:
+    - Last active config name (for multi-config mode)
+    """
+
+    version: str = "1.0"
+    """Settings format version."""
+
+    active_config_name: str | None = None
+    """Last selected config name (for multi-config mode)."""
+
+    @staticmethod
+    def default_path() -> Path:
+        """Get default settings file path.
+
+        Returns:
+            Path to .cmdorc/settings.json in current directory.
+        """
+        return Path.cwd() / ".cmdorc" / "settings.json"
+
+    @classmethod
+    def load(cls, path: Path | None = None) -> "UserSettings":
+        """Load settings from file.
+
+        Creates default settings if file doesn't exist or is invalid.
+
+        Args:
+            path: Path to settings file (defaults to .cmdorc/settings.json)
+
+        Returns:
+            UserSettings instance.
+        """
+        if path is None:
+            path = cls.default_path()
+
+        if not path.exists():
+            logger.debug(f"Settings file not found: {path}")
+            return cls()
+
+        try:
+            data = json.loads(path.read_text())
+            return cls(
+                version=data.get("version", "1.0"),
+                active_config_name=data.get("active_config_name"),
+            )
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Failed to load settings from {path}: {e}")
+            return cls()
+
+    def save(self, path: Path | None = None) -> None:
+        """Save settings to file.
+
+        Creates parent directories if needed.
+
+        Args:
+            path: Path to settings file (defaults to .cmdorc/settings.json)
+        """
+        if path is None:
+            path = self.default_path()
+
+        try:
+            # Ensure parent directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            data = {
+                "version": self.version,
+                "active_config_name": self.active_config_name,
+            }
+            path.write_text(json.dumps(data, indent=2))
+            logger.debug(f"Settings saved to {path}")
+        except OSError as e:
+            logger.warning(f"Failed to save settings to {path}: {e}")

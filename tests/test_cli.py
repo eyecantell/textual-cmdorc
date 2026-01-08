@@ -9,9 +9,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from cmdorc_frontend.config import load_frontend_config
+from cmdorc_frontend.config_discovery import MULTI_CONFIG_FILENAME
 from textual_cmdorc.cli import (
     DEFAULT_CONFIG_TEMPLATE,
     create_default_config,
+    handle_init_configs,
+    handle_list_configs,
+    handle_validate,
     main,
     parse_args,
 )
@@ -85,7 +89,8 @@ class TestParseArgs:
         """Test default arguments."""
         with patch.object(sys, "argv", ["cmdorc-tui"]):
             args = parse_args()
-            assert args.config == "config.toml"
+            # config is None by default, uses config discovery
+            assert args.config is None
 
     def test_parse_args_custom_config_short_flag(self):
         """Test custom config with -c flag."""
@@ -181,6 +186,24 @@ class TestParseArgs:
             args = parse_args()
             assert args.verbose is True
 
+    def test_parse_args_list_configs_flag(self):
+        """Test --list-configs flag."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "--list-configs"]):
+            args = parse_args()
+            assert args.list_configs is True
+
+    def test_parse_args_validate_flag(self):
+        """Test --validate flag."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "--validate"]):
+            args = parse_args()
+            assert args.validate is True
+
+    def test_parse_args_init_configs_flag(self):
+        """Test --init-configs flag."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "--init-configs"]):
+            args = parse_args()
+            assert args.init_configs is True
+
 
 class TestMain:
     """Tests for main function."""
@@ -205,27 +228,33 @@ class TestMain:
                 mock_instance.run.assert_called_once()
 
     def test_main_auto_creates_config(self):
-        """Test that main auto-creates missing config."""
+        """Test that main auto-creates config.toml when no config found."""
         with TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / "config.toml"
+            import os
 
-            with (
-                patch.object(sys, "argv", ["cmdorc-tui", "-c", str(config_path)]),
-                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
-            ):
-                mock_instance = MagicMock()
-                mock_app.return_value = mock_instance
-                with patch("builtins.print") as mock_print:
-                    main()
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
 
-                # Verify config was created
-                assert config_path.exists()
+                with (
+                    patch.object(sys, "argv", ["cmdorc-tui"]),
+                    patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+                ):
+                    mock_instance = MagicMock()
+                    mock_app.return_value = mock_instance
+                    with patch("builtins.print") as mock_print:
+                        main()
 
-                # Verify creation message was printed
-                mock_print.assert_called_once()
-                call_args = mock_print.call_args[0][0]
-                assert "Created default config at:" in call_args
-                assert str(config_path) in call_args
+                    # Verify config was created
+                    config_path = Path(tmpdir) / "config.toml"
+                    assert config_path.exists()
+
+                    # Verify creation message was printed
+                    mock_print.assert_called_once()
+                    call_args = mock_print.call_args[0][0]
+                    assert "Created default config at:" in call_args
+            finally:
+                os.chdir(original_cwd)
 
     def test_main_keyboard_interrupt(self):
         """Test handling of KeyboardInterrupt (Ctrl+C)."""
@@ -302,6 +331,203 @@ class TestMain:
                     assert Path(passed_path).is_absolute()
                 finally:
                     os.chdir(original_cwd)
+
+
+class TestHandleListConfigs:
+    """Tests for handle_list_configs function."""
+
+    def test_list_configs_multi_config(self):
+        """Test listing configs from cmdorc-tui.toml."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                # Create cmdorc-tui.toml with multiple configs
+                (Path(tmpdir) / "dev.toml").write_text('[[command]]\nname = "Dev"\ncommand = "echo dev"\n')
+                (Path(tmpdir) / "prod.toml").write_text('[[command]]\nname = "Prod"\ncommand = "echo prod"\n')
+                (Path(tmpdir) / MULTI_CONFIG_FILENAME).write_text(
+                    '[[config]]\nname = "Development"\nfiles = ["./dev.toml"]\n\n'
+                    '[[config]]\nname = "Production"\nfiles = ["./prod.toml"]\n'
+                )
+
+                with patch("builtins.print") as mock_print:
+                    result = handle_list_configs()
+
+                assert result == 0
+                # Check output contains config names
+                output = " ".join(str(call) for call in mock_print.call_args_list)
+                assert "Development" in output
+                assert "Production" in output
+                assert "[default]" in output
+            finally:
+                os.chdir(original_cwd)
+
+    def test_list_configs_single_config(self):
+        """Test listing single config mode."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                (Path(tmpdir) / "commands.toml").write_text('[[command]]\nname = "Test"\ncommand = "echo test"\n')
+
+                with patch("builtins.print") as mock_print:
+                    result = handle_list_configs()
+
+                assert result == 0
+                output = " ".join(str(call) for call in mock_print.call_args_list)
+                assert "Single config mode" in output
+            finally:
+                os.chdir(original_cwd)
+
+    def test_list_configs_no_config(self):
+        """Test listing when no config found."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+
+                with patch("builtins.print") as mock_print:
+                    result = handle_list_configs()
+
+                assert result == 1
+                output = " ".join(str(call) for call in mock_print.call_args_list)
+                assert "No configuration found" in output
+            finally:
+                os.chdir(original_cwd)
+
+
+class TestHandleValidate:
+    """Tests for handle_validate function."""
+
+    def test_validate_valid_config(self):
+        """Test validating a valid cmdorc-tui.toml."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                (Path(tmpdir) / "dev.toml").write_text('[[command]]\nname = "Dev"\ncommand = "echo dev"\n')
+                (Path(tmpdir) / MULTI_CONFIG_FILENAME).write_text(
+                    '[[config]]\nname = "Development"\nfiles = ["./dev.toml"]\n'
+                )
+
+                with patch("builtins.print") as mock_print:
+                    result = handle_validate()
+
+                assert result == 0
+                output = " ".join(str(call) for call in mock_print.call_args_list)
+                assert "is valid" in output
+            finally:
+                os.chdir(original_cwd)
+
+    def test_validate_missing_file(self):
+        """Test validating with missing referenced file."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                (Path(tmpdir) / MULTI_CONFIG_FILENAME).write_text(
+                    '[[config]]\nname = "Development"\nfiles = ["./missing.toml"]\n'
+                )
+
+                with patch("builtins.print") as mock_print:
+                    result = handle_validate()
+
+                assert result == 1
+                output = " ".join(str(call) for call in mock_print.call_args_list)
+                assert "Missing" in output
+            finally:
+                os.chdir(original_cwd)
+
+    def test_validate_no_multi_config(self):
+        """Test validating when no cmdorc-tui.toml exists."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+
+                with patch("builtins.print") as mock_print:
+                    result = handle_validate()
+
+                assert result == 1
+                output = " ".join(str(call) for call in mock_print.call_args_list)
+                assert "No" in output and "found" in output
+            finally:
+                os.chdir(original_cwd)
+
+
+class TestHandleInitConfigs:
+    """Tests for handle_init_configs function."""
+
+    def test_init_configs_creates_file(self):
+        """Test that init-configs creates cmdorc-tui.toml."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                (Path(tmpdir) / "build.toml").write_text("# build\n")
+                (Path(tmpdir) / "test.toml").write_text("# test\n")
+
+                with patch("builtins.print"):
+                    result = handle_init_configs()
+
+                assert result == 0
+                assert (Path(tmpdir) / MULTI_CONFIG_FILENAME).exists()
+                content = (Path(tmpdir) / MULTI_CONFIG_FILENAME).read_text()
+                assert "build.toml" in content
+                assert "test.toml" in content
+            finally:
+                os.chdir(original_cwd)
+
+    def test_init_configs_refuses_overwrite(self):
+        """Test that init-configs doesn't overwrite existing file."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                (Path(tmpdir) / MULTI_CONFIG_FILENAME).write_text("# existing\n")
+
+                with patch("builtins.print") as mock_print:
+                    result = handle_init_configs()
+
+                assert result == 1
+                output = " ".join(str(call) for call in mock_print.call_args_list)
+                assert "already exists" in output
+            finally:
+                os.chdir(original_cwd)
+
+    def test_init_configs_no_toml_files(self):
+        """Test init-configs when no TOML files found."""
+        with TemporaryDirectory() as tmpdir:
+            import os
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+
+                with patch("builtins.print") as mock_print:
+                    result = handle_init_configs()
+
+                assert result == 1
+                output = " ".join(str(call) for call in mock_print.call_args_list)
+                assert "No TOML files found" in output
+            finally:
+                os.chdir(original_cwd)
 
 
 class TestDefaultConfigTemplate:

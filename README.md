@@ -475,7 +475,6 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 MIT License. See [LICENSE](LICENSE) for details.
 
 ## Todo
-- Add ability to turn on/off file watchers
 - Add support for multiple (named) config files, also fix reload
 - Add ability to configure editor command
 - Add initial run support (create cmdorc.toml)

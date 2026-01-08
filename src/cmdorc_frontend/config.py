@@ -16,6 +16,67 @@ from cmdorc_frontend.watchers import WatcherConfig
 logger = logging.getLogger(__name__)
 
 
+def load_merged_frontend_config(
+    paths: list[Path],
+) -> tuple[KeyboardConfig, list[WatcherConfig]]:
+    """Load and merge frontend config from multiple files.
+
+    Merges keyboard shortcuts (later files override earlier) and concatenates watchers.
+
+    Args:
+        paths: List of config file paths
+
+    Returns:
+        Tuple of (merged_keyboard_config, merged_watchers)
+    """
+    merged_shortcuts: dict[str, str] = {}
+    keyboard_enabled = True
+    show_in_tooltips = True
+    all_watchers: list[WatcherConfig] = []
+
+    for path in paths:
+        if not path.exists():
+            logger.warning(f"Config file not found, skipping: {path}")
+            continue
+
+        try:
+            with open(path) as f:
+                raw = tomllib.loads(f.read())
+        except Exception as e:
+            logger.warning(f"Failed to parse {path}: {e}")
+            continue
+
+        # Merge keyboard config (later files override)
+        keyboard_raw = raw.get("keyboard", {})
+        if "shortcuts" in keyboard_raw:
+            merged_shortcuts.update(keyboard_raw["shortcuts"])
+        if "enabled" in keyboard_raw:
+            keyboard_enabled = keyboard_raw["enabled"]
+        if "show_in_tooltips" in keyboard_raw:
+            show_in_tooltips = keyboard_raw["show_in_tooltips"]
+
+        # Concatenate watchers
+        for w in raw.get("file_watcher", []):
+            all_watchers.append(
+                WatcherConfig(
+                    dir=path.parent / Path(w["dir"]),
+                    extensions=w.get("extensions"),
+                    ignore_dirs=w.get("ignore_dirs", ["__pycache__", ".git"]),
+                    trigger=w["trigger"],
+                    debounce_ms=w.get("debounce_ms", 300),
+                    recursive=w.get("recursive", True),
+                )
+            )
+
+    keyboard_config = KeyboardConfig(
+        shortcuts=merged_shortcuts,
+        enabled=keyboard_enabled,
+        show_in_tooltips=show_in_tooltips,
+    )
+
+    return keyboard_config, all_watchers
+
+
 def load_frontend_config(
     path: str | Path,
 ) -> tuple[RunnerConfig, KeyboardConfig, list[WatcherConfig], list[CommandNode]]:

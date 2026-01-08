@@ -57,7 +57,9 @@ The codebase uses a **simplified flat list design** after removing the hierarchi
 Reusable orchestration logic decoupled from any UI framework:
 - **orchestrator_adapter.py** - `OrchestratorAdapter`: Framework-agnostic wrapper for cmdorc's CommandOrchestrator
 - **config.py** - Parse TOML configs, build command hierarchy, validate keyboard shortcuts
-- **models.py** - Core dataclasses (CommandNode, TriggerSource, KeyboardConfig, etc.)
+- **models.py** - Core dataclasses (CommandNode, TriggerSource, KeyboardConfig, UserSettings, etc.)
+- **multiconfig.py** - Multi-config support (`ConfigSet`, `NamedConfig`, `load_cmdorc_tui_toml()`)
+- **config_discovery.py** - Config discovery logic (`discover_config()`, `resolve_startup_config()`)
 - **file_watcher.py** - `FileWatcherManager`: Watchdog integration for file-triggered commands
 - **state_manager.py** - StateReconciler (sync UI with cmdorc state on startup)
 - **watchers.py** - Abstract protocol for trigger sources
@@ -70,8 +72,11 @@ Two-layer widget architecture for maximum flexibility:
 - **cmdorc_app.py** - Contains both:
   - `CmdorcWidget`: Composable widget for embedding in multi-panel layouts
   - `CmdorcApp`: Thin standalone wrapper (adds Header/Footer to CmdorcWidget)
+- **config_switcher.py** - `ConfigSwitcher`: Dropdown widget for switching between named configs
+- **file_separator.py** - `FileSeparator`: Visual separator showing command source files
+- **setup_screen.py** - `SetupScreen`: First-run setup modal for creating initial config
 - **watcher_status_line.py** - `WatcherStatusLine`: Widget for toggling file watchers on/off
-- **cli.py** - Command-line interface with auto-config generation and logging configuration
+- **cli.py** - Command-line interface with config discovery and utility commands
 - **logging.py** - Logging utilities for debugging (`setup_logging()`, `disable_logging()`, `get_log_file_path()`)
 - **tooltip_builders.py** - `TooltipBuilder`: Constructs all tooltip content (status, play/stop, output)
 - **formatting.py** - Pure utility functions for time formatting, ANSI stripping, output preview
@@ -117,6 +122,42 @@ This supports both standalone use (90% of cases) and clean embedding in larger T
   - `adapter.disable_watchers()` - Disable trigger firing
   - `adapter.are_watchers_enabled()` - Check state
 - **Use case:** Disable triggers when making bulk file changes without triggering commands
+
+### Multi-Config Support
+Support for multiple named configurations via `cmdorc-tui.toml`:
+
+**Config Discovery (priority order):**
+1. `cmdorc-tui.toml` → Multi-config mode with named configs
+2. `commands.toml` → Single-config mode (preferred)
+3. `config.toml` → Single-config mode (legacy fallback)
+4. None → Auto-create or show setup screen
+
+**cmdorc-tui.toml format:**
+```toml
+# First config is the default
+[[config]]
+name = "Development"
+files = ["./config.toml", "./build.toml", "./test.toml"]
+
+[[config]]
+name = "Build Only"
+files = ["./build.toml"]
+```
+
+**UI Components:**
+- `ConfigSwitcher` - Dropdown for switching configs (appears with 2+ configs)
+- `FileSeparator` - Shows source file between commands from different files
+- Ctrl+K keyboard shortcut for cycling configs
+
+**CLI Commands:**
+- `cmdorc-tui --list-configs` - List available named configs
+- `cmdorc-tui --validate` - Validate cmdorc-tui.toml
+- `cmdorc-tui --init-configs` - Auto-generate from existing TOML files
+- `cmdorc-tui --config "Development"` - Start with named config
+
+**Settings Persistence:**
+- Active config saved in `.cmdorc/settings.json`
+- Restored on next startup
 
 ## High-Level Data Flow
 
@@ -305,6 +346,9 @@ pdm run pytest --cov --cov-report=html
 
 | File | Purpose | Key Classes |
 | **src/textual_cmdorc/cmdorc_app.py** | Widget + App architecture | `CmdorcWidget`, `CmdorcApp`, `HelpScreen` |
+| **src/textual_cmdorc/config_switcher.py** | Config switcher widget | `ConfigSwitcher` |
+| **src/textual_cmdorc/file_separator.py** | File separator widget | `FileSeparator` |
+| **src/textual_cmdorc/setup_screen.py** | First-run setup modal | `SetupScreen` |
 | **src/textual_cmdorc/watcher_status_line.py** | File watcher toggle widget | `WatcherStatusLine` |
 | **src/textual_cmdorc/details_screen.py** | Command details modal | `CommandDetailsScreen` |
 | **src/textual_cmdorc/logging.py** | Logging utilities | `setup_logging()`, `disable_logging()`, `get_log_file_path()` |
@@ -312,12 +356,15 @@ pdm run pytest --cov --cov-report=html
 | **src/textual_cmdorc/formatting.py** | Formatting utilities | `format_elapsed_time()`, `get_output_preview()` |
 | **src/cmdorc_frontend/orchestrator_adapter.py** | Framework-agnostic backend | `OrchestratorAdapter` |
 | **src/cmdorc_frontend/config.py** | Parse TOML, build hierarchy | `load_frontend_config()` |
-| **src/cmdorc_frontend/models.py** | Core dataclasses | `CommandNode`, `TriggerSource`, `KeyboardConfig` |
+| **src/cmdorc_frontend/models.py** | Core dataclasses | `CommandNode`, `TriggerSource`, `KeyboardConfig`, `UserSettings` |
+| **src/cmdorc_frontend/multiconfig.py** | Multi-config support | `ConfigSet`, `NamedConfig`, `load_cmdorc_tui_toml()` |
+| **src/cmdorc_frontend/config_discovery.py** | Config discovery | `discover_config()`, `resolve_startup_config()` |
 | **src/cmdorc_frontend/file_watcher.py** | Watchdog integration | `FileWatcherManager` (with enable/disable) |
-| **src/textual_cmdorc/cli.py** | Command-line interface | `main()`, `create_default_config()` |
-| **tests/test_watcher_status_line.py** | Watcher toggle tests | 7 tests, 100% coverage |
-| **tests/test_logging.py** | Logging tests | 26 tests, 79% coverage |
-| **tests/test_details_screen.py** | Details modal tests | 20 tests, 71% coverage |
+| **src/textual_cmdorc/cli.py** | Command-line interface | `main()`, `handle_list_configs()`, `handle_validate()` |
+| **tests/test_multiconfig.py** | Multi-config tests | 45 tests |
+| **tests/test_config_discovery.py** | Config discovery tests | 23 tests |
+| **tests/test_config_switcher.py** | Config switcher tests | 18 tests |
+| **tests/test_setup_screen.py** | Setup screen tests | 9 tests |
 | **architecture.md** | Full design reference | Simplified design decisions |
 | **README.md** | User-facing quickstart | Features, API, examples |
 

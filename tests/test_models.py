@@ -1,6 +1,8 @@
 """Tests for cmdorc_frontend models - Phase 0 architecture."""
 
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from cmdorc_frontend.models import (
     VALID_KEYS,
@@ -9,6 +11,7 @@ from cmdorc_frontend.models import (
     KeyboardConfig,
     PresentationUpdate,
     TriggerSource,
+    UserSettings,
 )
 
 
@@ -315,3 +318,102 @@ class TestCommandNode:
 
         assert len(parent.children) == 1
         assert parent.children[0].name == "Child"
+
+
+class TestUserSettings:
+    """Tests for UserSettings class."""
+
+    def test_user_settings_defaults(self):
+        """Test UserSettings default values."""
+        settings = UserSettings()
+        assert settings.version == "1.0"
+        assert settings.active_config_name is None
+
+    def test_user_settings_with_values(self):
+        """Test UserSettings with values."""
+        settings = UserSettings(version="2.0", active_config_name="Development")
+        assert settings.version == "2.0"
+        assert settings.active_config_name == "Development"
+
+    def test_user_settings_default_path(self):
+        """Test UserSettings.default_path returns correct path."""
+        path = UserSettings.default_path()
+        assert path.name == "settings.json"
+        assert path.parent.name == ".cmdorc"
+
+    def test_user_settings_load_creates_default_when_missing(self):
+        """Test load returns default settings when file missing."""
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "nonexistent" / "settings.json"
+            settings = UserSettings.load(path)
+            assert settings.version == "1.0"
+            assert settings.active_config_name is None
+
+    def test_user_settings_save_creates_file(self):
+        """Test save creates settings file."""
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / ".cmdorc" / "settings.json"
+            settings = UserSettings(active_config_name="Test")
+            settings.save(path)
+
+            assert path.exists()
+            content = path.read_text()
+            assert "Test" in content
+
+    def test_user_settings_load_from_file(self):
+        """Test load reads settings from file."""
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "settings.json"
+            path.write_text('{"version": "1.0", "active_config_name": "Production"}')
+
+            settings = UserSettings.load(path)
+            assert settings.active_config_name == "Production"
+
+    def test_user_settings_roundtrip(self):
+        """Test save and load roundtrip."""
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "settings.json"
+
+            original = UserSettings(active_config_name="MyConfig")
+            original.save(path)
+
+            loaded = UserSettings.load(path)
+            assert loaded.active_config_name == "MyConfig"
+            assert loaded.version == original.version
+
+    def test_user_settings_load_invalid_json(self):
+        """Test load handles invalid JSON gracefully."""
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "settings.json"
+            path.write_text("not valid json {{{")
+
+            settings = UserSettings.load(path)
+            # Should return defaults on error
+            assert settings.version == "1.0"
+            assert settings.active_config_name is None
+
+    def test_user_settings_load_with_default_path(self):
+        """Test load uses default path when not specified."""
+        with TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                # Create settings in default location
+                settings_dir = Path(tmpdir) / ".cmdorc"
+                settings_dir.mkdir()
+                (settings_dir / "settings.json").write_text('{"active_config_name": "FromDefault"}')
+
+                settings = UserSettings.load()
+                assert settings.active_config_name == "FromDefault"
+            finally:
+                os.chdir(original_cwd)
+
+    def test_user_settings_save_creates_parent_dirs(self):
+        """Test save creates parent directories if needed."""
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "deep" / "nested" / "settings.json"
+            settings = UserSettings(active_config_name="Test")
+            settings.save(path)
+
+            assert path.exists()
+            assert path.parent.exists()

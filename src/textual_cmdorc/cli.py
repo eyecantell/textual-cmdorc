@@ -4,6 +4,13 @@ import argparse
 import sys
 from pathlib import Path
 
+from cmdorc_frontend.config_discovery import (
+    MULTI_CONFIG_FILENAME,
+    discover_config,
+    find_toml_files,
+    generate_cmdorc_tui_toml,
+    resolve_startup_config,
+)
 from textual_cmdorc import __version__
 from textual_cmdorc.cmdorc_app import CmdorcApp
 
@@ -82,10 +89,13 @@ def parse_args() -> argparse.Namespace:
         prog="cmdorc-tui",
         description="A TUI frontend for cmdorc command orchestration.",
         epilog="Examples:\n"
-        "  cmdorc-tui                         # Auto-create config.toml and launch\n"
-        "  cmdorc-tui --config my-flow.toml   # Use custom config\n"
+        "  cmdorc-tui                         # Auto-detect config and launch\n"
+        "  cmdorc-tui --config my-flow.toml   # Use specific config file\n"
+        "  cmdorc-tui --config Development    # Use named config from cmdorc-tui.toml\n"
+        "  cmdorc-tui --list-configs          # List available named configs\n"
+        "  cmdorc-tui --validate              # Validate cmdorc-tui.toml\n"
+        "  cmdorc-tui --init-configs          # Generate cmdorc-tui.toml from TOML files\n"
         "  cmdorc-tui --log-file              # Enable logging to .cmdorc/logs/cmdorc-tui.log\n"
-        "  cmdorc-tui --log-file --log-all    # Log all packages (cmdorc, textual-filelink)\n"
         "  cmdorc-tui --version               # Show version",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -93,8 +103,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-c",
         "--config",
-        default="config.toml",
-        help="Path to config file (default: config.toml)",
+        default=None,
+        help="Config file path OR named config from cmdorc-tui.toml",
+    )
+
+    parser.add_argument(
+        "--list-configs",
+        action="store_true",
+        help="List available named configs from cmdorc-tui.toml",
+    )
+
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate cmdorc-tui.toml and check all referenced files exist",
+    )
+
+    parser.add_argument(
+        "--init-configs",
+        action="store_true",
+        help="Auto-generate cmdorc-tui.toml from found TOML files",
     )
 
     parser.add_argument(
@@ -132,6 +160,97 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def handle_list_configs() -> int:
+    """
+    List available named configs from cmdorc-tui.toml.
+
+    Returns:
+        Exit code (0 for success, 1 for no configs found)
+    """
+    discovery = discover_config()
+
+    if discovery.mode == "multi" and discovery.config_set:
+        print(f"Available configs (from {MULTI_CONFIG_FILENAME}):")
+        default_name = discovery.config_set.get_default_config().name
+        for config in discovery.config_set.configs:
+            files = ", ".join(p.name for p in config.files)
+            default_marker = " [default]" if config.name == default_name else ""
+            print(f"  - {config.name} ({files}){default_marker}")
+        return 0
+
+    elif discovery.mode == "single" and discovery.single_config_path:
+        print(f"Single config mode: {discovery.single_config_path.name}")
+        print(f"  (Create {MULTI_CONFIG_FILENAME} for multi-config support)")
+        return 0
+
+    else:
+        print("No configuration found.")
+        print(f"  Run with --init-configs to generate {MULTI_CONFIG_FILENAME}")
+        return 1
+
+
+def handle_validate() -> int:
+    """
+    Validate cmdorc-tui.toml and check all referenced files exist.
+
+    Returns:
+        Exit code (0 for valid, 1 for errors)
+    """
+    discovery = discover_config()
+
+    if discovery.mode != "multi":
+        print(f"No {MULTI_CONFIG_FILENAME} found to validate.")
+        return 1
+
+    if discovery.error:
+        print(f"Error loading {MULTI_CONFIG_FILENAME}: {discovery.error}")
+        return 1
+
+    if discovery.validation_errors:
+        print(f"Validation errors in {MULTI_CONFIG_FILENAME}:")
+        for error in discovery.validation_errors:
+            print(f"  - Missing: {error.missing_path}")
+            print(f"    Referenced in config: {error.config_name}")
+        return 1
+
+    print(f"{MULTI_CONFIG_FILENAME} is valid.")
+    if discovery.config_set:
+        print(f"  {len(discovery.config_set.configs)} config(s) defined")
+    return 0
+
+
+def handle_init_configs() -> int:
+    """
+    Auto-generate cmdorc-tui.toml from found TOML files.
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    cwd = Path.cwd()
+    meta_path = cwd / MULTI_CONFIG_FILENAME
+
+    if meta_path.exists():
+        print(f"{MULTI_CONFIG_FILENAME} already exists.")
+        print("  Remove it first if you want to regenerate.")
+        return 1
+
+    toml_files = find_toml_files(cwd)
+
+    if not toml_files:
+        print("No TOML files found to generate config from.")
+        print("  Create some .toml config files first.")
+        return 1
+
+    content = generate_cmdorc_tui_toml(toml_files, cwd)
+    meta_path.write_text(content)
+
+    print(f"Created {MULTI_CONFIG_FILENAME} with {len(toml_files)} config(s):")
+    for f in toml_files:
+        print(f"  - {f.name}")
+
+    return 0
+
+
 def main() -> None:
     """
     Main entry point for cmdorc-tui CLI.
@@ -139,7 +258,8 @@ def main() -> None:
     Handles:
     - Argument parsing
     - Logging configuration
-    - Auto-creation of config.toml
+    - Config discovery and resolution
+    - Utility commands (--list-configs, --validate, --init-configs)
     - Launching CmdorcApp
     - Error handling and exit codes
     """
@@ -151,21 +271,69 @@ def main() -> None:
 
         setup_logging(level=args.log_level, log_all=args.log_all)
 
-    # Resolve config path to absolute path
-    config_path = Path(args.config).resolve()
-
     try:
-        # Try to create default config if missing
-        if create_default_config(config_path):
-            print(f"Created default config at: {config_path}")
+        # Handle utility commands first
+        if args.list_configs:
+            sys.exit(handle_list_configs())
 
-        # Validate config exists (should be guaranteed by create_default_config)
-        if not config_path.exists():
-            print(f"Error: Config file not found: {config_path}", file=sys.stderr)
+        if args.validate:
+            sys.exit(handle_validate())
+
+        if args.init_configs:
+            sys.exit(handle_init_configs())
+
+        # Discover configs
+        discovery = discover_config()
+
+        # If explicit --config provided, use it
+        if args.config:
+            config_path = Path(args.config)
+            # Check if it's a file path
+            if config_path.exists() or config_path.suffix == ".toml":
+                config_path = config_path.resolve()
+                if not config_path.exists():
+                    print(f"Error: Config file not found: {config_path}", file=sys.stderr)
+                    sys.exit(1)
+                app = CmdorcApp(config_path=str(config_path))
+                app.run()
+                return
+            # Otherwise try to resolve as named config
+            try:
+                config_set, active_name, config_paths = resolve_startup_config(discovery, args.config)
+                app = CmdorcApp(
+                    config_paths=config_paths,
+                    config_set=config_set,
+                    active_config_name=active_name,
+                )
+                app.run()
+                return
+            except (FileNotFoundError, ValueError) as e:
+                print(f"Error: {e}", file=sys.stderr)
+                sys.exit(1)
+
+        # No explicit config - use discovery
+        if discovery.mode == "none":
+            # Fall back to old behavior: create default config.toml
+            config_path = Path("config.toml").resolve()
+            if create_default_config(config_path):
+                print(f"Created default config at: {config_path}")
+            app = CmdorcApp(config_path=str(config_path))
+            app.run()
+            return
+
+        # Resolve startup config from discovery
+        config_set, active_name, config_paths = resolve_startup_config(discovery)
+
+        if not config_paths:
+            print("Error: No config paths resolved", file=sys.stderr)
             sys.exit(1)
 
-        # Launch the app
-        app = CmdorcApp(config_path=str(config_path))
+        # Launch app with resolved config
+        app = CmdorcApp(
+            config_paths=config_paths,
+            config_set=config_set,
+            active_config_name=active_name,
+        )
         app.run()
 
     except KeyboardInterrupt:
