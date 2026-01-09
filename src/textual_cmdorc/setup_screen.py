@@ -83,21 +83,38 @@ name = "Example"
 command = "echo 'Hello from cmdorc-tui!'"
 triggers = ["say_hello"]
 
-# Add your commands below:
-# [[command]]
-# name = "Build"
-# command = "make build"
-# triggers = ["build_project"]
-
-# Optional: File watchers
+# More examples below:
+#
 # [[file_watcher]]
-# dir = "./src"
+# dir = "."
 # extensions = [".py"]
-# trigger = "file_changed"
-
-# Optional: Keyboard shortcuts
+# recursive = true
+# trigger = "py_file_changed"
+# debounce_ms = 300
+# ignore_dirs = ["__pycache__", ".git", "venv", ".venv"]
+#
+# [[command]]
+# name = "Lint"
+# command = "ruff check --fix ."
+# triggers = ["py_file_changed"]
+# max_concurrent = 1
+#
+# [[command]]
+# name = "Format"
+# command = "ruff format ."
+# triggers = ["command_success:Lint"]
+# max_concurrent = 1
+#
+# [[command]]
+# name = "Tests"
+# command = "pytest {{ base_dir }}"
+# triggers = ["command_success:Format"]
+# max_concurrent = 1
+#
 # [keyboard]
-# shortcuts = { Example = "1" }
+# shortcuts = { Lint = "1", Format = "2", Tests = "3" }
+# enabled = true
+# show_in_tooltips = true
 """
 
     def compose(self) -> ComposeResult:

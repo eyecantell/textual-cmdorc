@@ -58,12 +58,8 @@ class TestSetupScreenActions:
             original_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                (Path(tmpdir) / "build.toml").write_text(
-                    "[[command]]\nname = 'Build'\ncommand = 'echo build'\n"
-                )
-                (Path(tmpdir) / "test.toml").write_text(
-                    "[[command]]\nname = 'Test'\ncommand = 'echo test'\n"
-                )
+                (Path(tmpdir) / "build.toml").write_text("[[command]]\nname = 'Build'\ncommand = 'echo build'\n")
+                (Path(tmpdir) / "test.toml").write_text("[[command]]\nname = 'Test'\ncommand = 'echo test'\n")
 
                 screen = SetupScreen()
                 screen._dismiss_result = None
