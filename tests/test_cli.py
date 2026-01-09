@@ -227,8 +227,8 @@ class TestMain:
                 mock_app.assert_called_once_with(config_path=str(config_path))
                 mock_instance.run.assert_called_once()
 
-    def test_main_auto_creates_config(self):
-        """Test that main auto-creates config.toml when no config found."""
+    def test_main_shows_setup_screen_when_no_config(self):
+        """Test that main launches with show_setup=True when no config found."""
         with TemporaryDirectory() as tmpdir:
             import os
 
@@ -242,17 +242,12 @@ class TestMain:
                 ):
                     mock_instance = MagicMock()
                     mock_app.return_value = mock_instance
-                    with patch("builtins.print") as mock_print:
-                        main()
+                    main()
 
-                    # Verify config was created
-                    config_path = Path(tmpdir) / "config.toml"
-                    assert config_path.exists()
-
-                    # Verify creation message was printed
-                    mock_print.assert_called_once()
-                    call_args = mock_print.call_args[0][0]
-                    assert "Created default config at:" in call_args
+                    # Verify CmdorcApp was called with show_setup=True
+                    mock_app.assert_called_once_with(show_setup=True)
+                    # Verify app.run() was called
+                    mock_instance.run.assert_called_once()
             finally:
                 os.chdir(original_cwd)
 
@@ -478,8 +473,12 @@ class TestHandleInitConfigs:
             original_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                (Path(tmpdir) / "build.toml").write_text("# build\n")
-                (Path(tmpdir) / "test.toml").write_text("# test\n")
+                (Path(tmpdir) / "build.toml").write_text(
+                    "[[command]]\nname = 'Build'\ncommand = 'echo build'\n"
+                )
+                (Path(tmpdir) / "test.toml").write_text(
+                    "[[command]]\nname = 'Test'\ncommand = 'echo test'\n"
+                )
 
                 with patch("builtins.print"):
                     result = handle_init_configs()

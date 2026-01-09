@@ -313,11 +313,8 @@ def main() -> None:
 
         # No explicit config - use discovery
         if discovery.mode == "none":
-            # Fall back to old behavior: create default config.toml
-            config_path = Path("config.toml").resolve()
-            if create_default_config(config_path):
-                print(f"Created default config at: {config_path}")
-            app = CmdorcApp(config_path=str(config_path))
+            # Show setup screen - let user choose what to create
+            app = CmdorcApp(show_setup=True)
             app.run()
             return
 

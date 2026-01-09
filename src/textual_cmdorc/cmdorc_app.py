@@ -31,12 +31,14 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Static
 from textual_filelink import CommandLink, FileLinkList, sanitize_id
 
+from cmdorc_frontend.config_discovery import discover_config, resolve_startup_config
 from cmdorc_frontend.multiconfig import ConfigSet
 from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
 
 from .config_switcher import ConfigSwitcher
 from .details_screen import CommandDetailsScreen
 from .file_separator import FileSeparator
+from .setup_screen import SetupScreen
 from .tooltip_builders import TooltipBuilder
 from .watcher_status_line import WatcherStatusLine
 
@@ -985,31 +987,109 @@ class CmdorcApp(App):
     }
     """
 
-    def __init__(self, config_path: str = "config.toml", **kwargs):
+    def __init__(
+        self,
+        config_path: str | Path | None = None,
+        config_paths: list[str | Path] | None = None,
+        config_set: ConfigSet | None = None,
+        active_config_name: str | None = None,
+        show_setup: bool = False,
+        **kwargs,
+    ):
         """Initialize app.
 
         Args:
-            config_path: Path to TOML config file
+            config_path: Path to single TOML config file (backward compatible)
+            config_paths: List of TOML config files to merge (multi-config)
+            config_set: ConfigSet for named multi-config mode
+            active_config_name: Active config name (when using config_set)
+            show_setup: Show SetupScreen for first-run experience
         """
         super().__init__(**kwargs)
         self.config_path = config_path
+        self.config_paths = config_paths
+        self.config_set = config_set
+        self.active_config_name = active_config_name
+        self.show_setup = show_setup
         self.cmdorc_widget: CmdorcWidget | None = None
 
     def compose(self) -> ComposeResult:
         """Compose app layout."""
         yield Header()
 
-        try:
-            # Create and yield the widget
-            self.cmdorc_widget = CmdorcWidget(self.config_path)
-            yield self.cmdorc_widget
+        if self.show_setup:
+            # Don't create widget yet - will mount after setup
+            yield Static("Welcome! Starting setup...", id="setup-placeholder")
+        else:
+            try:
+                # Create and yield the widget (normal path)
+                self.cmdorc_widget = CmdorcWidget(
+                    config_path=self.config_path,
+                    config_paths=self.config_paths,
+                    config_set=self.config_set,
+                    active_config_name=self.active_config_name,
+                )
+                yield self.cmdorc_widget
 
-        except Exception as e:
-            # Fatal config error
-            logger.error(f"Failed to initialize app: {e}")
-            yield Static(f"❌ Configuration Error: {e}")
+            except Exception as e:
+                # Fatal config error
+                logger.error(f"Failed to initialize app: {e}")
+                yield Static(f"❌ Configuration Error: {e}")
 
         yield Footer()
+
+    async def on_mount(self) -> None:
+        """Handle mount - show setup screen if needed."""
+        if self.show_setup:
+            # Use push_screen with callback instead of push_screen_wait
+            # to avoid NoActiveWorker error
+            self.push_screen(SetupScreen(), callback=self._handle_setup_result)
+
+    def _handle_setup_result(self, result: str | None) -> None:
+        """Handle SetupScreen dismissal result.
+
+        Args:
+            result: Path to created config file, or None if user exited
+        """
+        if result is None:
+            # User chose exit - close app immediately
+            self.exit()
+            return
+
+        # Config was created - initialize widget with discovered config
+        asyncio.create_task(self._initialize_with_config())
+
+    async def _initialize_with_config(self) -> None:
+        """Initialize CmdorcWidget after config is created by SetupScreen."""
+        try:
+            # Remove placeholder
+            placeholder = self.query_one("#setup-placeholder", Static)
+            await placeholder.remove()
+
+            # Re-discover config (should find what SetupScreen created)
+            discovery = discover_config()
+
+            if discovery.mode == "none":
+                # This shouldn't happen - SetupScreen just created a config
+                await self.mount(Static("❌ Error: No config found after setup"))
+                return
+
+            # Resolve startup config
+            config_set, active_name, config_paths = resolve_startup_config(discovery)
+
+            # Create and mount widget with discovered config
+            self.cmdorc_widget = CmdorcWidget(
+                config_paths=config_paths,
+                config_set=config_set,
+                active_config_name=active_name,
+            )
+
+            # Mount before Footer
+            await self.mount(self.cmdorc_widget, before=self.query_one(Footer))
+
+        except Exception as e:
+            logger.error(f"Failed to initialize after setup: {e}")
+            await self.mount(Static(f"❌ Error initializing: {e}"))
 
     async def action_toggle_command(self, cmd_name: str) -> None:
         """Toggle command execution (delegated to widget).
