@@ -141,6 +141,7 @@ class CommandDetailsScreen(ModalScreen):
                     _embedded=True,
                     id="output-file-link",
                     tooltip="Press 'o' to open in editor",
+                    command_template=self.adapter.get_editor_command_template(),
                 )
 
             # Configuration section with embedded FileLink
@@ -151,6 +152,7 @@ class CommandDetailsScreen(ModalScreen):
                     _embedded=True,
                     id="config-file-link",
                     tooltip="Press 'e' to edit configuration",
+                    command_template=self.adapter.get_editor_command_template(),
                 )
 
             # Footer with keyboard hints

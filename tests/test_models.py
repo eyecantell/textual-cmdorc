@@ -198,6 +198,24 @@ class TestKeyboardConfig:
         assert config.shortcuts["Format"] == "2"
 
 
+class TestEditorConfig:
+    """Test EditorConfig dataclass."""
+
+    def test_editor_config_with_template(self):
+        """Test EditorConfig with explicit template."""
+        from cmdorc_frontend.models import EditorConfig
+
+        config = EditorConfig(command_template="vim {{ line_plus }} {{ path }}")
+        assert config.command_template == "vim {{ line_plus }} {{ path }}"
+
+    def test_editor_config_vscode_template(self):
+        """Test EditorConfig with VSCode template."""
+        from cmdorc_frontend.models import EditorConfig
+
+        config = EditorConfig(command_template="code --goto {{ path }}:{{ line }}:{{ column }}")
+        assert "code --goto" in config.command_template
+
+
 class TestValidKeys:
     """Test VALID_KEYS set for FIX #8."""
 

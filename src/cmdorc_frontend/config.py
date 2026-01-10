@@ -10,7 +10,7 @@ except ImportError:
 
 from cmdorc import RunnerConfig, load_config
 
-from cmdorc_frontend.models import CommandNode, KeyboardConfig
+from cmdorc_frontend.models import CommandNode, EditorConfig, KeyboardConfig
 from cmdorc_frontend.watchers import WatcherConfig
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def load_merged_frontend_config(
     paths: list[Path],
-) -> tuple[KeyboardConfig, list[WatcherConfig]]:
+) -> tuple[KeyboardConfig, list[WatcherConfig], EditorConfig]:
     """Load and merge frontend config from multiple files.
 
     Merges keyboard shortcuts (later files override earlier) and concatenates watchers.
@@ -27,11 +27,12 @@ def load_merged_frontend_config(
         paths: List of config file paths
 
     Returns:
-        Tuple of (merged_keyboard_config, merged_watchers)
+        Tuple of (merged_keyboard_config, merged_watchers, merged_editor_config)
     """
     merged_shortcuts: dict[str, str] = {}
     keyboard_enabled = True
     show_in_tooltips = True
+    merged_command_template = 'code --goto {{ path }}:{{ line }}:{{ column }}'
     all_watchers: list[WatcherConfig] = []
 
     for path in paths:
@@ -55,6 +56,13 @@ def load_merged_frontend_config(
         if "show_in_tooltips" in keyboard_raw:
             show_in_tooltips = keyboard_raw["show_in_tooltips"]
 
+        # Merge editor config (later files override)
+        editor_raw = raw.get("editor", {})
+        if "command_template" in editor_raw:
+            template = editor_raw["command_template"]
+            if template:  # Only override if not empty
+                merged_command_template = template
+
         # Concatenate watchers
         for w in raw.get("file_watcher", []):
             all_watchers.append(
@@ -74,19 +82,21 @@ def load_merged_frontend_config(
         show_in_tooltips=show_in_tooltips,
     )
 
-    return keyboard_config, all_watchers
+    editor_config = EditorConfig(command_template=merged_command_template)
+
+    return keyboard_config, all_watchers, editor_config
 
 
 def load_frontend_config(
     path: str | Path,
-) -> tuple[RunnerConfig, KeyboardConfig, list[WatcherConfig], list[CommandNode]]:
+) -> tuple[RunnerConfig, KeyboardConfig, list[WatcherConfig], list[CommandNode], EditorConfig]:
     """Load configuration for any frontend.
 
     Args:
         path: Path to TOML config file
 
     Returns:
-        Tuple of (runner_config, keyboard_config, watchers, hierarchy)
+        Tuple of (runner_config, keyboard_config, watchers, hierarchy, editor_config)
     """
     path = Path(path)
 
@@ -109,6 +119,14 @@ def load_frontend_config(
         shortcuts=keyboard_raw.get("shortcuts", {}),
         enabled=keyboard_raw.get("enabled", True),
         show_in_tooltips=keyboard_raw.get("show_in_tooltips", True),
+    )
+
+    # Parse editor config
+    VSCODE_DEFAULT = 'code --goto {{ path }}:{{ line }}:{{ column }}'
+    editor_raw = raw.get("editor", {})
+    template = editor_raw.get("command_template", "")
+    editor_config = EditorConfig(
+        command_template=template if template else VSCODE_DEFAULT  # Handle empty string
     )
 
     # Parse watchers
@@ -168,4 +186,4 @@ def load_frontend_config(
                 roots.append(root_node)
                 visited.add(root_name)
 
-    return runner_config, keyboard_config, watchers, roots
+    return runner_config, keyboard_config, watchers, roots, editor_config

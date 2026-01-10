@@ -208,7 +208,7 @@ Logic is in:
 
 ## Configuration Extensions
 
-textual-cmdorc extends cmdorc's TOML format with optional keyboard shortcuts and file watchers:
+textual-cmdorc extends cmdorc's TOML format with optional keyboard shortcuts, editor configuration, and file watchers:
 
 ### Keyboard Shortcuts (Optional)
 ```toml
@@ -219,6 +219,18 @@ show_in_tooltips = true          # default true
 ```
 
 **Validation:** Keys must be 1-9, a-z, or f1-f12. Invalid keys logged at startup.
+
+### Editor Configuration (Optional)
+```toml
+[editor]
+command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"  # VSCode (default)
+# command_template = "vim {{ line_plus }} {{ path }}"                # Vim
+# command_template = "subl {{ path }}:{{ line }}:{{ column }}"       # Sublime Text
+```
+
+**Template Variables:** `{{ path }}`, `{{ line }}`, `{{ column }}`, `{{ line_plus }}`, `{{ line_colon }}`, `{{ path_relative }}`, `{{ path_name }}`
+
+Configures which editor command is used when clicking file links (output files, config files). Defaults to VSCode if not specified.
 
 ### File Watchers (Optional, Repeating)
 ```toml

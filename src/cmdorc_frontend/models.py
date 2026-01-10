@@ -179,6 +179,31 @@ class KeyboardConfig:
     """Whether to show keyboard hints in tooltips."""
 
 
+@dataclass
+class EditorConfig:
+    """Editor integration configuration.
+
+    Configures which editor command is used when clicking file links.
+    """
+
+    command_template: str
+    """Command template for opening files.
+
+    Available template variables (from textual-filelink):
+    - {{ path }} - Full absolute path
+    - {{ path_relative }} - Path relative to cwd
+    - {{ path_name }} - Filename only
+    - {{ line }}, {{ column }} - Line/column numbers
+    - {{ line_colon }}, {{ column_colon }} - Colon-prefixed (:42)
+    - {{ line_plus }}, {{ column_plus }} - Plus-prefixed (+42)
+
+    Examples:
+    - VSCode: "code --goto {{ path }}:{{ line }}:{{ column }}"
+    - Vim: "vim {{ line_plus }} {{ path }}"
+    - Sublime: "subl {{ path }}:{{ line }}:{{ column }}"
+    """
+
+
 # FIX #8: Valid keyboard keys
 VALID_KEYS = set(
     [str(i) for i in range(1, 10)]  # 1-9

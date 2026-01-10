@@ -75,7 +75,7 @@ class TestCreateDefaultConfig:
             create_default_config(config_path)
 
             # Should not raise an exception
-            runner_config, keyboard_config, watchers, _ = load_frontend_config(config_path)
+            runner_config, keyboard_config, watchers, _, _ = load_frontend_config(config_path)
 
             assert runner_config is not None
             assert keyboard_config is not None
@@ -535,7 +535,7 @@ class TestDefaultConfigTemplate:
             config_path.write_text(DEFAULT_CONFIG_TEMPLATE)
 
             # Should not raise an exception
-            runner_config, keyboard_config, watchers, _ = load_frontend_config(config_path)
+            runner_config, keyboard_config, watchers, _, _ = load_frontend_config(config_path)
             assert runner_config is not None
 
     def test_template_has_variables_section(self):
@@ -593,7 +593,7 @@ class TestDefaultConfigTemplate:
             config_path = Path(tmpdir) / "config.toml"
             config_path.write_text(DEFAULT_CONFIG_TEMPLATE)
 
-            runner_config, keyboard_config, watchers, command_nodes = load_frontend_config(config_path)
+            runner_config, keyboard_config, watchers, command_nodes, _ = load_frontend_config(config_path)
 
             # Verify structure
             assert runner_config is not None

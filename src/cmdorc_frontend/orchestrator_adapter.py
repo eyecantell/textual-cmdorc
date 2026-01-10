@@ -100,12 +100,12 @@ class OrchestratorAdapter:
             runner_config = load_config(self.config_paths[0])
             self._command_sources: dict[str, Path] = {cmd.name: self.config_paths[0] for cmd in runner_config.commands}
             # Load frontend configuration
-            _, self.keyboard_config, self._watchers, self._hierarchy = load_frontend_config(self.config_paths[0])
+            _, self.keyboard_config, self._watchers, self._hierarchy, self.editor_config = load_frontend_config(self.config_paths[0])
         else:
             # Multi-config - use merged loader
             runner_config, self._command_sources = load_configs_with_sources(self.config_paths)
             # Merge frontend configs
-            self.keyboard_config, self._watchers = load_merged_frontend_config(self.config_paths)
+            self.keyboard_config, self._watchers, self.editor_config = load_merged_frontend_config(self.config_paths)
             # No hierarchy in multi-config mode (flat list only)
             self._hierarchy = []
 
@@ -450,6 +450,14 @@ class OrchestratorAdapter:
             Dict mapping command_name -> shortcut key
         """
         return self.keyboard_config.shortcuts.copy() if self.keyboard_config.shortcuts else {}
+
+    def get_editor_command_template(self) -> str:
+        """Get the configured editor command template.
+
+        Returns:
+            Command template string with placeholders for textual-filelink.
+        """
+        return self.editor_config.command_template
 
     def get_command_names(self) -> list[str]:
         """Get all registered command names in TOML order.

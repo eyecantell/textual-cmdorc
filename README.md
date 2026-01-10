@@ -191,7 +191,7 @@ For headless/programmatic use (no UI), see the **OrchestratorAdapter** API below
 
 ## Configuration
 
-textual-cmdorc extends cmdorc's TOML format with optional keyboard shortcuts and file watchers:
+textual-cmdorc extends cmdorc's TOML format with optional keyboard shortcuts, editor configuration, and file watchers:
 
 ```toml
 # Standard cmdorc config
@@ -216,6 +216,12 @@ shortcuts = { Lint = "1", Format = "2", Tests = "3" }
 enabled = true
 show_in_tooltips = true
 
+# Optional: Editor configuration
+[editor]
+command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"  # VSCode (default)
+# command_template = "vim {{ line_plus }} {{ path }}"                # Vim
+# command_template = "subl {{ path }}:{{ line }}:{{ column }}"       # Sublime Text
+
 # Optional: File watchers
 [[file_watcher]]
 dir = "./src"
@@ -227,6 +233,25 @@ ignore_dirs = ["__pycache__", ".git"]
 ```
 
 Run `cmdorc-tui` without a config file to auto-generate a starter config.
+
+### Editor Configuration
+
+Configure which editor opens when you click file links (output files, config files):
+
+**Template Variables:**
+- `{{ path }}` - Full file path
+- `{{ line }}`, `{{ column }}` - Line/column numbers
+- `{{ line_plus }}` - +42 format (vim-style)
+- `{{ line_colon }}` - :42 format
+- `{{ path_relative }}`, `{{ path_name }}` - Relative path and filename only
+
+**Built-in Templates:**
+- VSCode (default): `"code --goto {{ path }}:{{ line }}:{{ column }}"`
+- Vim: `"vim {{ line_plus }} {{ path }}"`
+- Sublime Text: `"subl {{ path }}:{{ line }}:{{ column }}"`
+- Nano: `"nano {{ line_plus }} {{ path }}"`
+
+See [textual-filelink docs](https://github.com/eyecantell/textual-filelink) for full template reference.
 
 ## Logging
 

@@ -341,6 +341,7 @@ class CmdorcWidget(Widget):
                             show_timer=True,
                             show_settings=True,
                             timer_field_width=8,
+                            command_template=self.adapter.get_editor_command_template(),
                         )
                         # Set play/stop button tooltips
                         link.set_play_stop_tooltips(
@@ -365,6 +366,7 @@ class CmdorcWidget(Widget):
                             show_settings=False,
                             tooltip=f"Error: {e}",
                             timer_field_width=8,
+                            command_template=self.adapter.get_editor_command_template(),
                         )
                         self.file_list.add_item(link)
 
@@ -845,6 +847,7 @@ class CmdorcWidget(Widget):
                         show_timer=True,
                         show_settings=True,
                         timer_field_width=8,
+                        command_template=self.adapter.get_editor_command_template(),
                     )
                     link.set_play_stop_tooltips(
                         run_tooltip=self.tooltip_builder.build_play_tooltip(cmd_name),
@@ -867,6 +870,7 @@ class CmdorcWidget(Widget):
                         show_settings=False,
                         tooltip=f"Error: {e}",
                         timer_field_width=8,
+                        command_template=self.adapter.get_editor_command_template(),
                     )
                     self.file_list.add_item(link)
 

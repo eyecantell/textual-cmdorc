@@ -258,6 +258,9 @@ name = "Tests"
 command = "pytest {{ base_dir }}"
 triggers = ["command_success:Format"]
 
+[editor]
+command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"
+
 [keyboard]
 shortcuts = { Lint = "1", Format = "2", Tests = "3" }
 enabled = true
@@ -271,7 +274,7 @@ show_in_tooltips = true
 runner_config = load_config(path)  # From cmdorc library
 
 # 2. Load frontend config
-runner_config, keyboard_config, watchers, hierarchy = load_frontend_config(path)
+runner_config, keyboard_config, watchers, hierarchy, editor_config = load_frontend_config(path)
 
 # 3. Create orchestrator
 orchestrator = CommandOrchestrator(runner_config)
