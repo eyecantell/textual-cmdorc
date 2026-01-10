@@ -224,9 +224,9 @@ show_in_tooltips = true          # default true
 ```toml
 [[file_watcher]]
 dir = "./src"
-patterns = ["**/*.py"]           # optional, takes precedence
-extensions = [".py"]             # optional, fallback
-ignore_dirs = ["__pycache__"]    # optional
+extensions = [".py"]             # optional — file extensions to watch
+recursive = true                 # optional, default true — recursively watch subdirectories
+ignore_dirs = ["__pycache__"]    # optional — directories to ignore
 trigger_emitted = "py_file_changed"      # required — cmdorc event name
 debounce_ms = 300                # optional, default 300ms
 ```

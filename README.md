@@ -59,6 +59,42 @@ cmdorc-tui
 cmdorc-tui --config my-config.toml
 ```
 
+### Multi-Config Support
+
+Support multiple named configurations via `cmdorc-tui.toml`:
+
+```toml
+# First config is the default
+[[config]]
+name = "Development"
+files = ["./dev.toml", "./build.toml", "./test.toml"]
+
+[[config]]
+name = "Build Only"
+files = ["./build.toml"]
+```
+
+**CLI Commands:**
+```bash
+# List available named configs
+cmdorc-tui --list-configs
+
+# Validate cmdorc-tui.toml
+cmdorc-tui --validate
+
+# Auto-generate cmdorc-tui.toml from existing TOML files
+cmdorc-tui --init-configs
+
+# Start with named config
+cmdorc-tui --config "Development"
+```
+
+**UI Features:**
+- Config switcher dropdown (appears with 2+ configs)
+- File separators showing source file between commands
+- Keyboard shortcut `Ctrl+K` to cycle configs
+- Active config saved and restored on restart
+
 ### Programmatic Usage
 ```python
 from textual_cmdorc import CmdorcApp
@@ -183,7 +219,8 @@ show_in_tooltips = true
 # Optional: File watchers
 [[file_watcher]]
 dir = "./src"
-patterns = ["**/*.py"]
+extensions = [".py"]
+recursive = true
 trigger_emitted = "py_file_changed"
 debounce_ms = 300
 ignore_dirs = ["__pycache__", ".git"]
@@ -475,10 +512,9 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 MIT License. See [LICENSE](LICENSE) for details.
 
 ## Todo
-- Add support for multiple (named) config files, also fix reload
 - Add ability to configure editor command
-- Add initial run support (create cmdorc.toml)
-- Add watcher to auto-load the in use config if it changes?
+- Test on mac
+
 
 ## Contributing
 
