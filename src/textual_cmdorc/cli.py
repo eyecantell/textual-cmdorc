@@ -46,6 +46,10 @@ name = "Tests"
 command = "pytest {{ base_dir }}"
 triggers = ["command_success:Format"]
 
+[output_storage]
+directory = ".cmdorc/outputs"
+keep_history = 10
+
 [keyboard]
 shortcuts = { Lint = "1", Format = "2", Tests = "3" }
 enabled = true

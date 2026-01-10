@@ -108,11 +108,21 @@ class CommandOrchestrator:
         pass
 
 
+class OutputStorageConfig:
+    """Mock OutputStorageConfig."""
+
+    def __init__(self, directory=".cmdorc/outputs", keep_history=10, output_extension=".txt"):
+        self.directory = directory
+        self.keep_history = keep_history
+        self.output_extension = output_extension
+
+
 class RunnerConfig:
     """Mock RunnerConfig."""
 
-    def __init__(self, commands=None):
+    def __init__(self, commands=None, output_storage=None):
         self.commands = commands or [CommandConfig()]
+        self.output_storage = output_storage or OutputStorageConfig()
 
 
 def load_config(path):
@@ -140,7 +150,15 @@ def load_config(path):
         if not commands:
             commands = [CommandConfig()]
 
-        return RunnerConfig(commands=commands)
+        # Parse output_storage section
+        output_storage_data = raw.get("output_storage", {})
+        output_storage = OutputStorageConfig(
+            directory=output_storage_data.get("directory", ".cmdorc/outputs"),
+            keep_history=output_storage_data.get("keep_history", 0),
+            output_extension=output_storage_data.get("output_extension", ".txt"),
+        )
+
+        return RunnerConfig(commands=commands, output_storage=output_storage)
     except Exception:
         # Fallback
         return RunnerConfig()
@@ -155,6 +173,7 @@ cmdorc_module.ResolvedCommand = ResolvedCommand
 cmdorc_module.RunHandle = RunHandle
 cmdorc_module.CommandOrchestrator = CommandOrchestrator
 cmdorc_module.RunnerConfig = RunnerConfig
+cmdorc_module.OutputStorageConfig = OutputStorageConfig
 cmdorc_module.load_config = load_config
 
 sys.modules["cmdorc"] = cmdorc_module

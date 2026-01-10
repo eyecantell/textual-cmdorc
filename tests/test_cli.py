@@ -565,6 +565,22 @@ class TestDefaultConfigTemplate:
         assert "enabled = true" in DEFAULT_CONFIG_TEMPLATE
         assert "show_in_tooltips = true" in DEFAULT_CONFIG_TEMPLATE
 
+    def test_template_has_output_storage_section(self):
+        """Test that template has [output_storage] section for persisting command outputs.
+
+        This is critical - without output_storage, cmdorc defaults to keep_history=0
+        which means no output files are created, breaking output linking in the UI.
+        """
+        assert "[output_storage]" in DEFAULT_CONFIG_TEMPLATE
+        assert 'directory = ".cmdorc/outputs"' in DEFAULT_CONFIG_TEMPLATE
+        assert "keep_history = " in DEFAULT_CONFIG_TEMPLATE
+        # Ensure keep_history is > 0 (any positive number works)
+        import re
+
+        match = re.search(r"keep_history\s*=\s*(\d+)", DEFAULT_CONFIG_TEMPLATE)
+        assert match is not None, "keep_history not found in template"
+        assert int(match.group(1)) >= 1, "keep_history must be >= 1 to persist outputs"
+
     def test_template_has_trigger_chain(self):
         """Test that template has proper trigger chain."""
         assert 'triggers = ["py_file_changed"]' in DEFAULT_CONFIG_TEMPLATE
@@ -595,3 +611,7 @@ class TestDefaultConfigTemplate:
             assert watchers[0].trigger_emitted == "py_file_changed"
             assert ".py" in (watchers[0].extensions or [])
             assert watchers[0].recursive is True
+
+            # Verify output_storage config (prevents regression where outputs aren't persisted)
+            assert runner_config.output_storage is not None
+            assert runner_config.output_storage.keep_history >= 1, "keep_history must be >= 1 to persist outputs"

@@ -111,6 +111,10 @@ triggers = ["say_hello"]
 # triggers = ["command_success:Format"]
 # max_concurrent = 1
 #
+# [output_storage]
+# directory = ".cmdorc/outputs"
+# keep_history = 10
+#
 # [keyboard]
 # shortcuts = { Lint = "1", Format = "2", Tests = "3" }
 # enabled = true
