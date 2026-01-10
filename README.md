@@ -184,7 +184,7 @@ show_in_tooltips = true
 [[file_watcher]]
 dir = "./src"
 patterns = ["**/*.py"]
-trigger = "py_file_changed"
+trigger_emitted = "py_file_changed"
 debounce_ms = 300
 ignore_dirs = ["__pycache__", ".git"]
 ```
@@ -267,7 +267,7 @@ tail -f .cmdorc/logs/cmdorc-tui.log
 - Run with `--log-file` to see startup errors in the log
 
 **Commands not triggering on file changes:**
-- Verify trigger name matches between `[[file_watcher]]` and `[[command]]` sections
+- Verify trigger name matches between `trigger_emitted` in `[[file_watcher]]` and `triggers` in `[[command]]` sections
 - Check pattern syntax: use `**/*.py` for all Python files at any depth
 - Ensure file changes aren't in ignored directories (`__pycache__`, `.git`, etc.)
 - Use `--log-file` to see if file changes are detected

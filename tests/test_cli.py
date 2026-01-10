@@ -549,7 +549,7 @@ class TestDefaultConfigTemplate:
         assert 'dir = "."' in DEFAULT_CONFIG_TEMPLATE
         assert 'extensions = [".py"]' in DEFAULT_CONFIG_TEMPLATE
         assert "recursive = true" in DEFAULT_CONFIG_TEMPLATE
-        assert 'trigger = "py_file_changed"' in DEFAULT_CONFIG_TEMPLATE
+        assert 'trigger_emitted = "py_file_changed"' in DEFAULT_CONFIG_TEMPLATE
 
     def test_template_has_command_sections(self):
         """Test that template has [[command]] sections."""
@@ -592,6 +592,6 @@ class TestDefaultConfigTemplate:
             assert keyboard_config.shortcuts["Lint"] == "1"
 
             # Verify watcher config
-            assert watchers[0].trigger == "py_file_changed"
+            assert watchers[0].trigger_emitted == "py_file_changed"
             assert ".py" in (watchers[0].extensions or [])
             assert watchers[0].recursive is True

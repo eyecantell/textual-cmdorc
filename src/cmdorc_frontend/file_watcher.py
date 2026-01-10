@@ -206,7 +206,7 @@ class FileWatcherManager:
 
         # Create one handler for all directories (shared trigger)
         handler = _DebouncedHandler(
-            trigger_name=config.trigger,
+            trigger_name=config.trigger_emitted,
             orchestrator=self.orchestrator,
             loop=self.loop,
             manager=self,
@@ -224,7 +224,7 @@ class FileWatcherManager:
         self.handlers.append(handler)
 
         logger.info(
-            f"Watching '{config.trigger}' - "
+            f"Watching '{config.trigger_emitted}' - "
             f"{len(directories)} dir(s), "
             f"extensions: {config.extensions}, "
             f"debounce: {config.debounce_ms}ms"

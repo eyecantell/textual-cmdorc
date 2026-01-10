@@ -227,7 +227,7 @@ dir = "./src"
 patterns = ["**/*.py"]           # optional, takes precedence
 extensions = [".py"]             # optional, fallback
 ignore_dirs = ["__pycache__"]    # optional
-trigger = "py_file_changed"      # required — cmdorc event name
+trigger_emitted = "py_file_changed"      # required — cmdorc event name
 debounce_ms = 300                # optional, default 300ms
 ```
 

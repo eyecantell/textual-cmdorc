@@ -532,7 +532,7 @@ class CommandDetailsScreen(ModalScreen):
                 lines.append("")
 
             # File watchers that trigger this command
-            relevant_watchers = [w for w in self.adapter._watchers if w.trigger in config.triggers]
+            relevant_watchers = [w for w in self.adapter._watchers if w.trigger_emitted in config.triggers]
 
             if relevant_watchers:
                 lines.append("")
@@ -544,7 +544,7 @@ class CommandDetailsScreen(ModalScreen):
                         lines.append(f"    extensions: {extensions_str}")
                     if watcher.recursive:
                         lines.append("    recursive: true")
-                    lines.append(f"    trigger: {watcher.trigger}")
+                    lines.append(f"    trigger_emitted: {watcher.trigger_emitted}")
                     lines.append(f"    debounce: {watcher.debounce_ms}ms")
 
             return "\n".join(lines)

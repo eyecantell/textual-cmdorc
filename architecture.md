@@ -238,7 +238,7 @@ base_dir = "."
 [[file_watcher]]
 dir = "."
 patterns = ["**/*.py"]
-trigger = "py_file_changed"
+trigger_emitted = "py_file_changed"
 debounce_ms = 300
 
 [[command]]

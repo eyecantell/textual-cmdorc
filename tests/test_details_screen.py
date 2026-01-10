@@ -63,7 +63,7 @@ def mock_adapter(mock_orchestrator, tmp_path):
     watcher.dir = Path("./src")
     watcher.extensions = [".py"]
     watcher.recursive = True
-    watcher.trigger = "py_file_changed"
+    watcher.trigger_emitted = "py_file_changed"
     watcher.debounce_ms = 300
     adapter._watchers = [watcher]
 

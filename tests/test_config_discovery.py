@@ -282,7 +282,7 @@ triggers = ["file_changed"]
 [[file_watcher]]
 dir = "."
 extensions = [".py"]
-trigger = "file_changed"
+trigger_emitted = "file_changed"
 
 [keyboard]
 shortcuts = { Lint = "1" }

@@ -62,7 +62,7 @@ def load_merged_frontend_config(
                     dir=path.parent / Path(w["dir"]),
                     extensions=w.get("extensions"),
                     ignore_dirs=w.get("ignore_dirs", ["__pycache__", ".git"]),
-                    trigger=w["trigger"],
+                    trigger_emitted=w["trigger_emitted"],
                     debounce_ms=w.get("debounce_ms", 300),
                     recursive=w.get("recursive", True),
                 )
@@ -117,7 +117,7 @@ def load_frontend_config(
             dir=path.parent / Path(w["dir"]),
             extensions=w.get("extensions"),
             ignore_dirs=w.get("ignore_dirs", ["__pycache__", ".git"]),
-            trigger=w["trigger"],
+            trigger_emitted=w["trigger_emitted"],
             debounce_ms=w.get("debounce_ms", 300),
             recursive=w.get("recursive", True),
         )

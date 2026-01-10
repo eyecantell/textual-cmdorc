@@ -25,7 +25,7 @@ base_dir = "."
 dir = "."
 extensions = [".py"]
 recursive = true
-trigger = "py_file_changed"
+trigger_emitted = "py_file_changed"
 debounce_ms = 300
 ignore_dirs = ["__pycache__", ".git", "venv", ".venv"]
 

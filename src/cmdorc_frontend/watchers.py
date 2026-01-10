@@ -18,8 +18,8 @@ class WatcherConfig:
     ignore_dirs: list[str] | None = None
     """Directories to ignore."""
 
-    trigger: str = ""
-    """Trigger name to fire on file change."""
+    trigger_emitted: str = ""
+    """Trigger emitted by this watcher on file change."""
 
     debounce_ms: int = 300
     """Debounce delay in milliseconds."""
