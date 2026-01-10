@@ -115,6 +115,12 @@ triggers = ["say_hello"]
 # directory = ".cmdorc/outputs"
 # keep_history = 10
 #
+# [editor]
+# command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"  # VSCode (default)
+# # Other options:
+# # command_template = "vim {{ line_plus }} {{ path }}"  # Vim
+# # command_template = "subl {{ path }}:{{ line }}:{{ column }}"  # Sublime Text
+#
 # [keyboard]
 # shortcuts = { Lint = "1", Format = "2", Tests = "3" }
 # enabled = true

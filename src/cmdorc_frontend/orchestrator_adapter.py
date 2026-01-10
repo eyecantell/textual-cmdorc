@@ -100,7 +100,9 @@ class OrchestratorAdapter:
             runner_config = load_config(self.config_paths[0])
             self._command_sources: dict[str, Path] = {cmd.name: self.config_paths[0] for cmd in runner_config.commands}
             # Load frontend configuration
-            _, self.keyboard_config, self._watchers, self._hierarchy, self.editor_config = load_frontend_config(self.config_paths[0])
+            _, self.keyboard_config, self._watchers, self._hierarchy, self.editor_config = load_frontend_config(
+                self.config_paths[0]
+            )
         else:
             # Multi-config - use merged loader
             runner_config, self._command_sources = load_configs_with_sources(self.config_paths)

@@ -32,7 +32,7 @@ def load_merged_frontend_config(
     merged_shortcuts: dict[str, str] = {}
     keyboard_enabled = True
     show_in_tooltips = True
-    merged_command_template = 'code --goto {{ path }}:{{ line }}:{{ column }}'
+    merged_command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"
     all_watchers: list[WatcherConfig] = []
 
     for path in paths:
@@ -122,7 +122,7 @@ def load_frontend_config(
     )
 
     # Parse editor config
-    VSCODE_DEFAULT = 'code --goto {{ path }}:{{ line }}:{{ column }}'
+    VSCODE_DEFAULT = "code --goto {{ path }}:{{ line }}:{{ column }}"
     editor_raw = raw.get("editor", {})
     template = editor_raw.get("command_template", "")
     editor_config = EditorConfig(

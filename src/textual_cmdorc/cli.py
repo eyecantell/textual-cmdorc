@@ -50,6 +50,9 @@ triggers = ["command_success:Format"]
 directory = ".cmdorc/outputs"
 keep_history = 10
 
+[editor]
+command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"
+
 [keyboard]
 shortcuts = { Lint = "1", Format = "2", Tests = "3" }
 enabled = true
