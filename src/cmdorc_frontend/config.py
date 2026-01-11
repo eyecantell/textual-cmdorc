@@ -9,6 +9,7 @@ except ImportError:
     import tomli as tomllib  # type: ignore
 
 from cmdorc import RunnerConfig, load_config
+from textual_filelink import FileLink
 
 from cmdorc_frontend.models import CommandNode, EditorConfig, KeyboardConfig
 from cmdorc_frontend.watchers import WatcherConfig
@@ -21,7 +22,13 @@ def load_merged_frontend_config(
 ) -> tuple[KeyboardConfig, list[WatcherConfig], EditorConfig]:
     """Load and merge frontend config from multiple files.
 
-    Merges keyboard shortcuts (later files override earlier) and concatenates watchers.
+    Merges keyboard shortcuts (later files override earlier), editor config
+    (later files override earlier), and concatenates watchers.
+
+    Override behavior:
+    - Keyboard shortcuts: Later files override earlier files (per-key basis)
+    - Editor template: Later files completely replace earlier template
+    - Watchers: Concatenated (all watchers from all files are active)
 
     Args:
         paths: List of config file paths
@@ -32,7 +39,7 @@ def load_merged_frontend_config(
     merged_shortcuts: dict[str, str] = {}
     keyboard_enabled = True
     show_in_tooltips = True
-    merged_command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"
+    merged_command_template = FileLink.VSCODE_TEMPLATE
     all_watchers: list[WatcherConfig] = []
 
     for path in paths:
@@ -50,7 +57,11 @@ def load_merged_frontend_config(
         # Merge keyboard config (later files override)
         keyboard_raw = raw.get("keyboard", {})
         if "shortcuts" in keyboard_raw:
-            merged_shortcuts.update(keyboard_raw["shortcuts"])
+            new_shortcuts = keyboard_raw["shortcuts"]
+            overlapping = set(merged_shortcuts.keys()) & set(new_shortcuts.keys())
+            if overlapping:
+                logger.debug(f"Keyboard shortcuts overridden by {path.name}: {overlapping}")
+            merged_shortcuts.update(new_shortcuts)
         if "enabled" in keyboard_raw:
             keyboard_enabled = keyboard_raw["enabled"]
         if "show_in_tooltips" in keyboard_raw:
@@ -61,6 +72,9 @@ def load_merged_frontend_config(
         if "command_template" in editor_raw:
             template = editor_raw["command_template"]
             if template:  # Only override if not empty
+                if merged_command_template != FileLink.VSCODE_TEMPLATE:
+                    # Not the default, so we're overriding a previous config
+                    logger.debug(f"Editor template overridden by {path.name}")
                 merged_command_template = template
 
         # Concatenate watchers
@@ -122,11 +136,10 @@ def load_frontend_config(
     )
 
     # Parse editor config
-    VSCODE_DEFAULT = "code --goto {{ path }}:{{ line }}:{{ column }}"
     editor_raw = raw.get("editor", {})
     template = editor_raw.get("command_template", "")
     editor_config = EditorConfig(
-        command_template=template if template else VSCODE_DEFAULT  # Handle empty string
+        command_template=template if template else FileLink.VSCODE_TEMPLATE  # Handle empty string
     )
 
     # Parse watchers

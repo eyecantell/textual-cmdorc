@@ -537,8 +537,7 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 MIT License. See [LICENSE](LICENSE) for details.
 
 ## Todo
-- Add ability to configure editor command
-The textual-filelink module recently added the ability to supply a command string (instead of callable) for opening files (when the filelink is clicked). Lets create a config entry so that users can configure the command to be used. We should default it to using vscode (FileLink.VSCODE_TEMPLATE). The textual-filelink module has been updated (with pdm add) to the latest. Here is the changelog entry from it:
+- It appears when our file watcher fires (due to a python file change), we are actually triggering Lint twice. See @commands.toml for config.
 - Test on mac
 
 
