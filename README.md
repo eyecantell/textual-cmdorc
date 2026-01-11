@@ -334,6 +334,62 @@ tail -f .cmdorc/logs/cmdorc-tui.log
 - Ensure file changes aren't in ignored directories (`__pycache__`, `.git`, etc.)
 - Use `--log-file` to see if file changes are detected
 
+**Commands re-triggering themselves (running twice):**
+
+This is a common gotcha when using auto-fixing commands with file watchers. If your command modifies watched files, it will trigger the file watcher again, causing a loop.
+
+**Example scenario:**
+```toml
+[[file_watcher]]
+dir = "."
+extensions = [".py"]
+trigger_emitted = "py_file_changed"
+
+[[command]]
+name = "Lint"
+command = "ruff check --fix ."  # This modifies .py files!
+triggers = ["py_file_changed"]
+
+[[command]]
+name = "Format"
+command = "ruff format ."  # This also modifies .py files!
+triggers = ["command_success:Lint"]
+```
+
+What happens:
+1. You save a file → `py_file_changed` fires → Lint runs
+2. Lint fixes files with `--fix` → file watcher detects changes
+3. After debounce (300ms) → `py_file_changed` fires again → Lint runs again
+4. This can repeat if Format also modifies files
+
+**How to identify this:**
+- Watch the "last changed file" display on the watcher status line:
+  ```
+  👁️  File Watchers (1) Enabled
+     src/app.py 2s ago
+  ```
+- If the file shown is one that your command modifies (not the file you edited), you're seeing self-triggering
+
+**Solutions:**
+1. **Use cmdorc's retrigger policies** - Set `on_retrigger = "skip"` to ignore triggers while the command is running:
+   ```toml
+   [[command]]
+   name = "Lint"
+   command = "ruff check --fix ."
+   triggers = ["py_file_changed"]
+   on_retrigger = "skip"  # Ignore new triggers while running
+   ```
+
+2. **Disable watchers during bulk changes** - Press `[w]` to toggle file watchers off, make your changes, then toggle back on
+
+3. **Increase debounce time** - Set a longer `debounce_ms` to allow commands to complete:
+   ```toml
+   [[file_watcher]]
+   debounce_ms = 5000  # 5 seconds
+   ```
+
+4. **Separate watch directories** - Watch only `src/` but run commands on the whole project
+
 **Example log output** (when file watcher triggers):
 ```
 2026-01-05 10:23:45 | DEBUG    | cmdorc_frontend.file_watcher:45 | File event detected: modified src/app.py
@@ -537,7 +593,7 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 MIT License. See [LICENSE](LICENSE) for details.
 
 ## Todo
-- It appears when our file watcher fires (due to a python file change), we are actually triggering Lint twice. See @commands.toml for config.
+- Currently if a command being run is cancelled by starting a new run (command on_retrigger = "cancel_and_restart") the command status shows as cancelled even tho the retriggered command is actually running the new run.  The command will then update once the run finishes. 
 - Test on mac
 
 

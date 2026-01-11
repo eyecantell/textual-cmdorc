@@ -248,11 +248,11 @@ class TestCmdorcWidgetLifecycleCallbacks:
             # Verify running_commands was updated
             assert "Test" in widget.running_commands
 
-            # Verify set_status was called with running=True
+            # Verify set_status was called with running=True (no icon, uses default spinner)
             mock_link.set_status.assert_called_once()
             call_kwargs = mock_link.set_status.call_args[1]
             assert call_kwargs["running"] is True
-            assert call_kwargs["icon"] == "⏳"
+            assert "icon" not in call_kwargs  # Uses textual-filelink default spinner
 
     @pytest.mark.asyncio
     async def test_on_command_started_clears_output_path(self, mock_adapter, mock_config_path):

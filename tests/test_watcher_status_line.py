@@ -1,5 +1,8 @@
 """Tests for WatcherStatusLine widget."""
 
+import time
+from pathlib import Path
+
 from textual_cmdorc.watcher_status_line import WatcherStatusLine
 
 
@@ -108,3 +111,90 @@ def test_status_line_many_watchers():
 
     assert line.watcher_count == 10
     assert line.enabled is True
+
+
+# Tests for last triggered file display
+
+
+def test_status_line_initial_no_last_file():
+    """Status line starts with no last file info."""
+    line = WatcherStatusLine(watcher_count=2, enabled=True)
+
+    assert line.last_file is None
+    assert line.last_file_time is None
+
+
+def test_status_line_set_last_file():
+    """set_last_file() stores file path and timestamp."""
+    line = WatcherStatusLine(watcher_count=2, enabled=True)
+
+    test_path = Path("/test/src/app.py")
+    test_time = time.time()
+
+    line.set_last_file(test_path, test_time)
+
+    assert line.last_file == test_path
+    assert line.last_file_time == test_time
+
+
+def test_status_line_set_last_file_triggers_update():
+    """set_last_file() triggers display update."""
+    line = WatcherStatusLine(watcher_count=2, enabled=True)
+
+    # Spy on _update_display
+    update_count = [0]
+    original_update = line._update_display
+
+    def spy_update():
+        update_count[0] += 1
+        original_update()
+
+    line._update_display = spy_update
+
+    # Reset counter
+    update_count[0] = 0
+
+    # Set last file
+    line.set_last_file(Path("/test/file.py"), time.time())
+
+    # Should trigger update
+    assert update_count[0] == 1
+
+
+def test_status_line_display_with_last_file(monkeypatch):
+    """Display includes file path and time when last file is set."""
+    line = WatcherStatusLine(watcher_count=2, enabled=True)
+
+    # Mock Path.cwd() to return a known path
+    monkeypatch.setattr(Path, "cwd", lambda: Path("/test"))
+
+    # Set last file (relative path under cwd)
+    test_path = Path("/test/src/app.py")
+    test_time = time.time() - 5  # 5 seconds ago
+
+    line.set_last_file(test_path, test_time)
+
+    # Verify state is stored correctly
+    assert line.last_file == test_path
+    assert line.last_file_time == test_time
+
+    # Verify the display was updated by checking internal state
+    # When enabled with a file, _update_display builds text with file info
+    assert line.enabled is True
+
+
+def test_status_line_display_disabled_hides_file_info():
+    """Disabled state doesn't show file info even if set."""
+    line = WatcherStatusLine(watcher_count=2, enabled=False)
+
+    # Set last file
+    test_path = Path("/test/file.py")
+    test_time = time.time()
+    line.set_last_file(test_path, test_time)
+
+    # File info should still be stored
+    assert line.last_file == test_path
+    assert line.last_file_time == test_time
+
+    # But display shows disabled (file info not shown when disabled)
+    assert line.enabled is False

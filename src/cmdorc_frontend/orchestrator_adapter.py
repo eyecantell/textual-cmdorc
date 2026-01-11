@@ -257,6 +257,16 @@ class OrchestratorAdapter:
         """
         return len(self._watchers)
 
+    def get_last_triggered_file(self) -> tuple[Path | None, float | None]:
+        """Get the last file that triggered a watcher.
+
+        Returns:
+            Tuple of (file_path, timestamp) or (None, None) if no triggers yet.
+        """
+        if self._watcher_manager:
+            return self._watcher_manager.get_last_triggered_file()
+        return None, None
+
     def _wire_lifecycle_callbacks(self, command_name: str) -> None:
         """Wire all registered callbacks for a command to orchestrator.
 

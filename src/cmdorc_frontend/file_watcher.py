@@ -46,6 +46,8 @@ class _DebouncedHandler(FileSystemEventHandler):
         self.extensions = extensions
         self.ignore_dirs = ignore_dirs or []
         self._timer: Timer | None = None
+        self._last_trigger_time: float = 0.0
+        self._pending_file: Path | None = None  # File that will trigger next
 
     def _matches_filters(self, path: Path) -> bool:
         """Check if path matches configured filters.
@@ -86,41 +88,54 @@ class _DebouncedHandler(FileSystemEventHandler):
 
         # Schedule new trigger
         def fire_trigger():
-            """Fire trigger on event loop (only if manager is enabled)."""
+            """Fire trigger on event loop (only if manager is enabled and not in cooldown)."""
+            import time
+
+            now = time.time()
+
+            # Cooldown check: skip if we triggered too recently
+            if now - self._last_trigger_time < self.debounce_ms / 1000.0:
+                logger.debug(f"Skipping trigger '{self.trigger_name}' - within cooldown period")
+                return
+
             # Check if watchers are enabled before triggering
             if not self.manager._enabled:
                 logger.debug(f"Skipping trigger '{self.trigger_name}' - watchers disabled")
                 return
 
             try:
+                self._last_trigger_time = now  # Update BEFORE triggering
+                # Record the triggered file in the manager
+                if self._pending_file:
+                    self.manager._set_last_triggered_file(self._pending_file, now)
                 self.loop.call_soon_threadsafe(
                     lambda: asyncio.create_task(self.orchestrator.trigger(self.trigger_name))
                 )
-                logger.debug(f"Triggered '{self.trigger_name}' from file change")
+                logger.debug(f"Triggered '{self.trigger_name}' from file change: {self._pending_file}")
             except Exception as e:
                 logger.error(f"Failed to trigger '{self.trigger_name}': {e}")
 
         self._timer = Timer(self.debounce_ms / 1000.0, fire_trigger)
         self._timer.start()
 
-    def on_modified(self, event: FileSystemEvent) -> None:
-        """Handle file modification events."""
+    def on_any_event(self, event: FileSystemEvent) -> None:
+        """Handle all file system events with unified debouncing.
+
+        Uses on_any_event instead of separate on_modified/on_created to ensure
+        all event types flow through the same debounce timer.
+        """
+        # Skip directory events
         if event.is_directory:
+            return
+
+        # Only process created and modified events
+        if event.event_type not in ("created", "modified"):
             return
 
         path = Path(event.src_path)
         if self._matches_filters(path):
-            logger.debug(f"File change detected: {path}")
-            self._schedule_trigger()
-
-    def on_created(self, event: FileSystemEvent) -> None:
-        """Handle file creation events."""
-        if event.is_directory:
-            return
-
-        path = Path(event.src_path)
-        if self._matches_filters(path):
-            logger.debug(f"File created: {path}")
+            logger.debug(f"File event ({event.event_type}): {path}")
+            self._pending_file = path  # Track which file will trigger
             self._schedule_trigger()
 
 
@@ -139,6 +154,8 @@ class FileWatcherManager:
         self.observer = PollingObserver(timeout=1.0)
         self.handlers: list[_DebouncedHandler] = []
         self._enabled = True  # Controls whether triggers fire
+        self._last_triggered_file: Path | None = None
+        self._last_triggered_time: float | None = None
 
     def _discover_directories(self, root: Path, ignore_dirs: list[str] | None) -> list[Path]:
         """Recursively discover all subdirectories, respecting ignore_dirs.
@@ -280,3 +297,21 @@ class FileWatcherManager:
             True if triggers are enabled, False otherwise.
         """
         return self._enabled
+
+    def _set_last_triggered_file(self, file_path: Path, timestamp: float) -> None:
+        """Set the last triggered file (called by handlers).
+
+        Args:
+            file_path: Path to the file that triggered
+            timestamp: Time when the trigger fired
+        """
+        self._last_triggered_file = file_path
+        self._last_triggered_time = timestamp
+
+    def get_last_triggered_file(self) -> tuple[Path | None, float | None]:
+        """Get the last file that triggered a watcher.
+
+        Returns:
+            Tuple of (file_path, timestamp) or (None, None) if no triggers yet.
+        """
+        return self._last_triggered_file, self._last_triggered_time

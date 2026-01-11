@@ -376,7 +376,7 @@ class CmdorcWidget(Widget):
                 logger.debug(f"Wiring command_started:{cmd_name} callback")
                 self.adapter.orchestrator.on_event(
                     f"command_started:{cmd_name}",
-                    lambda h, ctx, name=cmd_name: self._on_command_started(name, h),
+                    lambda h, _ctx, name=cmd_name: self._on_command_started(name, h),
                 )
                 # Completion events (via adapter lifecycle callbacks)
                 self.adapter.on_command_success(
@@ -395,6 +395,10 @@ class CmdorcWidget(Widget):
             # Bind global keyboard shortcuts
             self._bind_keyboard_shortcuts()
 
+            # Start polling for last triggered file (to update watcher status line)
+            if self.watcher_status:
+                self.set_interval(1.0, self._poll_last_triggered_file)
+
         except Exception as e:
             logger.error(f"Failed to mount widget: {e}", exc_info=True)
 
@@ -402,6 +406,20 @@ class CmdorcWidget(Widget):
         """Cleanup on widget removal."""
         if self.adapter:
             self.adapter.detach()
+
+    def _poll_last_triggered_file(self) -> None:
+        """Poll adapter for last triggered file and update watcher status line."""
+        if not self.adapter or not self.watcher_status:
+            return
+
+        file_path, timestamp = self.adapter.get_last_triggered_file()
+        # Only update if we have new info (different from current)
+        if (
+            file_path
+            and timestamp
+            and (self.watcher_status.last_file != file_path or self.watcher_status.last_file_time != timestamp)
+        ):
+            self.watcher_status.set_last_file(file_path, timestamp)
 
     def _bind_keyboard_shortcuts(self) -> None:
         """Bind global keyboard shortcuts from config."""
@@ -473,18 +491,7 @@ class CmdorcWidget(Widget):
             return
 
         logger.info(f"Starting command: {cmd_name}")
-        self.running_commands.add(cmd_name)
-
-        # Update UI to running state (generic tooltip until handle available)
-        link = self._get_link(cmd_name)
-        if link:
-            link.set_status(
-                running=True,
-                icon="⏳",
-                tooltip=f"Starting {cmd_name}...",
-                start_time=time.time(),  # Set estimated start time, will be updated with actual from handle
-            )
-
+        # Note: UI update happens in _on_command_started callback (consolidated path)
         # Request execution (async, returns immediately)
         self.adapter.request_run(cmd_name)
 
@@ -548,12 +555,8 @@ class CmdorcWidget(Widget):
             )
             self.app.push_screen(screen)
 
-    def on_watcher_status_line_toggled(self, event: WatcherStatusLine.Toggled) -> None:
-        """Handle click on watcher status line - toggle watchers.
-
-        Args:
-            event: WatcherStatusLine.Toggled message
-        """
+    def on_watcher_status_line_toggled(self, _event: WatcherStatusLine.Toggled) -> None:
+        """Handle click on watcher status line - toggle watchers."""
         if not self.adapter or not self.watcher_status:
             return
 
@@ -656,7 +659,6 @@ class CmdorcWidget(Widget):
 
             link.set_status(
                 running=True,
-                icon="⏳",
                 tooltip=status_tooltip,
                 stop_tooltip=stop_tooltip,
                 start_time=start_time,
@@ -883,7 +885,7 @@ class CmdorcWidget(Widget):
                 # Started event (via orchestrator.on_event)
                 self.adapter.orchestrator.on_event(
                     f"command_started:{cmd_name}",
-                    lambda h, ctx, name=cmd_name: self._on_command_started(name, h),
+                    lambda h, _ctx, name=cmd_name: self._on_command_started(name, h),
                 )
                 # Completion events (via adapter lifecycle callbacks)
                 self.adapter.on_command_success(
