@@ -99,7 +99,7 @@ class _DebouncedHandler(FileSystemEventHandler):
                 return
 
             # Check if watchers are enabled before triggering
-            if not self.manager._enabled:
+            if not self.manager.is_enabled():
                 logger.debug(f"Skipping trigger '{self.trigger_name}' - watchers disabled")
                 return
 

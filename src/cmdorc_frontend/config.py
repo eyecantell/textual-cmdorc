@@ -127,7 +127,7 @@ def load_frontend_config(
     except Exception as e:
         raise ValueError(f"Failed to parse config file {path}: {e}") from e
 
-    # Parse keyboard config (FIX #8: validation happens in controller)
+    # Parse keyboard config (validation happens in orchestrator adapter)
     keyboard_raw = raw.get("keyboard", {})
     keyboard_config = KeyboardConfig(
         shortcuts=keyboard_raw.get("shortcuts", {}),

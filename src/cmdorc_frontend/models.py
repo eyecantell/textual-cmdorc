@@ -61,7 +61,7 @@ class TriggerSource:
             separator: String to join trigger events with.
             max_width: Maximum width before truncation (default 80).
                       If exceeded, truncates from left with "..." prefix.
-                      FIX #7: Minimum width check (10 chars) prevents negative keep_chars.
+                      Minimum width of 10 chars prevents negative keep_chars.
 
         Returns:
             Formatted string representation of the chain, possibly truncated.
@@ -71,7 +71,7 @@ class TriggerSource:
 
         full_chain = separator.join(self.chain)
 
-        # FIX #7: Minimum width check before truncation
+        # Minimum width check before truncation
         if max_width < 10:
             # Too narrow to truncate meaningfully, return as-is
             return full_chain
@@ -146,7 +146,7 @@ class CommandNode:
 class ConfigValidationResult:
     """Results from startup configuration validation.
 
-    RECOMMENDATION #3: Built by controller, consumed by app for display only.
+    Built by orchestrator adapter, consumed by app for display only.
     """
 
     commands_loaded: int = 0
@@ -166,7 +166,7 @@ class ConfigValidationResult:
 class KeyboardConfig:
     """Keyboard shortcut configuration.
 
-    FIX #8: Shortcuts validated against VALID_KEYS set (1-9, a-z, f1-f12).
+    Shortcuts are validated against VALID_KEYS set (1-9, a-z, f1-f12).
     """
 
     shortcuts: dict[str, str]
@@ -204,7 +204,7 @@ class EditorConfig:
     """
 
 
-# FIX #8: Valid keyboard keys
+# Valid keyboard keys for shortcuts
 VALID_KEYS = set(
     [str(i) for i in range(1, 10)]  # 1-9
     + [chr(i) for i in range(ord("a"), ord("z") + 1)]  # a-z

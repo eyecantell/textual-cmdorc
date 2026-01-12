@@ -117,20 +117,20 @@ class TestConfigSwitcherSelection:
         assert len(messages) == 0
 
 
-class TestConfigSwitcherSetActive:
-    """Tests for set_active method."""
+class TestConfigSwitcherSetActiveSilently:
+    """Tests for set_active_silently method."""
 
-    def test_set_active_changes_config(self):
-        """set_active changes the active config."""
+    def test_set_active_silently_changes_config(self):
+        """set_active_silently changes the active config."""
         switcher = ConfigSwitcher(
             config_names=["Dev", "Prod"],
             active_name="Dev",
         )
-        switcher.set_active("Prod")
+        switcher.set_active_silently("Prod")
         assert switcher.active_name == "Prod"
 
-    def test_set_active_no_message(self):
-        """set_active doesn't post a message."""
+    def test_set_active_silently_no_message(self):
+        """set_active_silently doesn't post a message."""
         switcher = ConfigSwitcher(
             config_names=["Dev", "Prod"],
             active_name="Dev",
@@ -138,17 +138,17 @@ class TestConfigSwitcherSetActive:
         messages = []
         switcher.post_message = lambda msg: messages.append(msg)
 
-        switcher.set_active("Prod")
+        switcher.set_active_silently("Prod")
 
         assert len(messages) == 0
 
-    def test_set_active_invalid_ignored(self):
-        """set_active with invalid name is ignored."""
+    def test_set_active_silently_invalid_ignored(self):
+        """set_active_silently with invalid name is ignored."""
         switcher = ConfigSwitcher(
             config_names=["Dev", "Prod"],
             active_name="Dev",
         )
-        switcher.set_active("NonExistent")
+        switcher.set_active_silently("NonExistent")
         assert switcher.active_name == "Dev"
 
 

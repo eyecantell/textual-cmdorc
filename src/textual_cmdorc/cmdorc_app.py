@@ -283,6 +283,80 @@ class CmdorcWidget(Widget):
             logger.error(f"Failed to initialize widget: {e}")
             yield Static(f"❌ Configuration Error: {e}")
 
+    def _create_command_link(self, cmd_name: str) -> CommandLink:
+        """Create a CommandLink widget for the given command.
+
+        Handles status icon mapping from history and error cases.
+        Returns CommandLink ready to add to file_list.
+
+        Args:
+            cmd_name: Name of the command
+
+        Returns:
+            CommandLink widget (either normal or warning version on error)
+        """
+        try:
+            # Get command status from orchestrator
+            status = self.adapter.orchestrator.get_status(cmd_name)
+
+            # Extract output path from last run
+            initial_output_path = None
+            if status and status.last_run and status.last_run.output_file:
+                initial_output_path = status.last_run.output_file
+
+            # Extract end_time for timer display (convert to timestamp)
+            initial_end_time = None
+            if status and status.last_run and status.last_run.end_time:
+                initial_end_time = status.last_run.end_time.timestamp()
+
+            # Determine initial status icon based on history
+            initial_status_icon = "◯"  # Default to idle
+            if status and status.last_run:
+                state_name = status.last_run.state.name
+                icon_map = {
+                    "SUCCESS": "✅",
+                    "FAILED": "❌",
+                    "CANCELLED": "⚠️",
+                }
+                initial_status_icon = icon_map.get(state_name, "◯")
+
+            link = CommandLink(
+                command_name=cmd_name,
+                output_path=initial_output_path,
+                end_time=initial_end_time,
+                initial_status_icon=initial_status_icon,
+                initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
+                show_timer=True,
+                show_settings=True,
+                timer_field_width=8,
+                command_template=self.adapter.get_editor_command_template(),
+            )
+            # Set play/stop button tooltips
+            link.set_play_stop_tooltips(
+                run_tooltip=self.tooltip_builder.build_play_tooltip(cmd_name),
+                stop_tooltip=self.tooltip_builder.build_stop_tooltip(cmd_name, None),
+                append_shortcuts=False,
+            )
+            # Set name/output tooltip
+            link.set_name_tooltip(
+                self.tooltip_builder.build_output_tooltip(cmd_name, is_running=False),
+                append_shortcuts=False,
+            )
+            return link
+        except Exception as e:
+            # Config error - return warning link
+            logger.error(f"Failed to create link for {cmd_name}: {e}")
+            return CommandLink(
+                command_name=f"⚠️ {cmd_name}",
+                output_path=None,
+                initial_status_icon="⚠️",
+                initial_status_tooltip=f"Config error: {e}",
+                show_settings=False,
+                tooltip=f"Error: {e}",
+                timer_field_width=8,
+                command_template=self.adapter.get_editor_command_template(),
+            )
+
     async def on_mount(self) -> None:
         """Attach adapter to event loop, populate list, and wire callbacks."""
         if not self.adapter:
@@ -310,66 +384,9 @@ class CmdorcWidget(Widget):
                             current_source = cmd_source
                             separator = FileSeparator(cmd_source.name)
                             self.file_list.add_item(separator)
-                    try:
-                        # Check if there's a historical run with output file
-                        status = self.adapter.orchestrator.get_status(cmd_name)
-                        initial_output_path = None
-                        if status and status.last_run and status.last_run.output_file:
-                            initial_output_path = status.last_run.output_file
-
-                        # Extract end_time for timer display (convert to timestamp)
-                        initial_end_time = None
-                        if status and status.last_run and status.last_run.end_time:
-                            initial_end_time = status.last_run.end_time.timestamp()
-
-                        # Determine initial status icon based on history
-                        initial_status_icon = "◯"  # Default to idle
-                        if status and status.last_run:
-                            state_name = status.last_run.state.name
-                            icon_map = {
-                                "SUCCESS": "✅",
-                                "FAILED": "❌",
-                                "CANCELLED": "⚠️",
-                            }
-                            initial_status_icon = icon_map.get(state_name, "◯")
-
-                        link = CommandLink(
-                            command_name=cmd_name,
-                            output_path=initial_output_path,
-                            end_time=initial_end_time,
-                            initial_status_icon=initial_status_icon,
-                            initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
-                            show_timer=True,
-                            show_settings=True,
-                            timer_field_width=8,
-                            command_template=self.adapter.get_editor_command_template(),
-                        )
-                        # Set play/stop button tooltips
-                        link.set_play_stop_tooltips(
-                            run_tooltip=self.tooltip_builder.build_play_tooltip(cmd_name),
-                            stop_tooltip=self.tooltip_builder.build_stop_tooltip(cmd_name, None),
-                            append_shortcuts=False,
-                        )
-                        # Set name/output tooltip
-                        link.set_name_tooltip(
-                            self.tooltip_builder.build_output_tooltip(cmd_name, is_running=False),
-                            append_shortcuts=False,
-                        )
-                        self.file_list.add_item(link)
-                    except Exception as e:
-                        # Config error - show warning icon
-                        logger.error(f"Failed to create link for {cmd_name}: {e}")
-                        link = CommandLink(
-                            command_name=f"⚠️ {cmd_name}",
-                            output_path=None,
-                            initial_status_icon="⚠️",
-                            initial_status_tooltip=f"Config error: {e}",
-                            show_settings=False,
-                            tooltip=f"Error: {e}",
-                            timer_field_width=8,
-                            command_template=self.adapter.get_editor_command_template(),
-                        )
-                        self.file_list.add_item(link)
+                    # Create and add command link
+                    link = self._create_command_link(cmd_name)
+                    self.file_list.add_item(link)
 
             # Wire lifecycle callbacks for all commands
             for cmd_name in self.adapter.get_command_names():
@@ -787,6 +804,9 @@ class CmdorcWidget(Widget):
             # Clear running commands state
             self.running_commands.clear()
 
+            # Store old watcher count for comparison
+            old_watcher_count = self.watcher_status.watcher_count if self.watcher_status else 0
+
             # Remove old command list and wait for removal to complete
             if self.file_list:
                 await self.file_list.remove()
@@ -800,6 +820,28 @@ class CmdorcWidget(Widget):
             # Recreate tooltip builder
             self.tooltip_builder = TooltipBuilder(self.adapter)
 
+            # Get new watcher count and update WatcherStatusLine if needed
+            new_watcher_count = self.adapter.count_watchers() if self.adapter else 0
+            main_container = self.query_one("#main-container", Vertical)
+
+            if old_watcher_count == 0 and new_watcher_count > 0:
+                # Watchers were added - create and mount WatcherStatusLine
+                self.watcher_status = WatcherStatusLine(
+                    watcher_count=new_watcher_count,
+                    enabled=True,
+                    command_template=self.adapter.get_editor_command_template(),
+                )
+                await main_container.mount(self.watcher_status, before=0)  # Mount at top
+            elif old_watcher_count > 0 and new_watcher_count == 0:
+                # Watchers were removed - remove WatcherStatusLine
+                if self.watcher_status:
+                    await self.watcher_status.remove()
+                    self.watcher_status = None
+            elif old_watcher_count > 0 and new_watcher_count > 0 and old_watcher_count != new_watcher_count:
+                # Watcher count changed but both non-zero - update count
+                if self.watcher_status:
+                    self.watcher_status.watcher_count = new_watcher_count
+
             # Rebuild EMPTY command list
             self.file_list = FileLinkList(
                 show_toggles=False,
@@ -808,7 +850,6 @@ class CmdorcWidget(Widget):
             )
 
             # Mount new list to the main container (not self) to preserve ordering
-            main_container = self.query_one("#main-container", Vertical)
             await main_container.mount(self.file_list)
 
             # Track current source file for separators (multi-config only)
@@ -824,64 +865,9 @@ class CmdorcWidget(Widget):
                         current_source = cmd_source
                         separator = FileSeparator(cmd_source.name)
                         self.file_list.add_item(separator)
-                try:
-                    # Check if there's a historical run with output file
-                    status = self.adapter.orchestrator.get_status(cmd_name)
-                    initial_output_path = None
-                    if status and status.last_run and status.last_run.output_file:
-                        initial_output_path = status.last_run.output_file
-
-                    # Extract end_time for timer display (convert to timestamp)
-                    initial_end_time = None
-                    if status and status.last_run and status.last_run.end_time:
-                        initial_end_time = status.last_run.end_time.timestamp()
-
-                    # Determine initial status icon based on history
-                    initial_status_icon = "◯"  # Default to idle
-                    if status and status.last_run:
-                        state_name = status.last_run.state.name
-                        icon_map = {
-                            "SUCCESS": "✅",
-                            "FAILED": "❌",
-                            "CANCELLED": "⚠️",
-                        }
-                        initial_status_icon = icon_map.get(state_name, "◯")
-
-                    link = CommandLink(
-                        command_name=cmd_name,
-                        output_path=initial_output_path,
-                        end_time=initial_end_time,
-                        initial_status_icon=initial_status_icon,
-                        initial_status_tooltip=self.tooltip_builder.build_status_tooltip_idle(cmd_name),
-                        show_timer=True,
-                        show_settings=True,
-                        timer_field_width=8,
-                        command_template=self.adapter.get_editor_command_template(),
-                    )
-                    link.set_play_stop_tooltips(
-                        run_tooltip=self.tooltip_builder.build_play_tooltip(cmd_name),
-                        stop_tooltip=self.tooltip_builder.build_stop_tooltip(cmd_name, None),
-                        append_shortcuts=False,
-                    )
-                    # Set name/output tooltip
-                    link.set_name_tooltip(
-                        self.tooltip_builder.build_output_tooltip(cmd_name, is_running=False),
-                        append_shortcuts=False,
-                    )
-                    self.file_list.add_item(link)
-                except Exception as e:
-                    logger.error(f"Failed to create link for {cmd_name}: {e}")
-                    link = CommandLink(
-                        command_name=cmd_name,
-                        output_path=None,
-                        initial_status_icon="⚠️",
-                        initial_status_tooltip=f"Config error: {e}",
-                        show_settings=False,
-                        tooltip=f"Error: {e}",
-                        timer_field_width=8,
-                        command_template=self.adapter.get_editor_command_template(),
-                    )
-                    self.file_list.add_item(link)
+                # Create and add command link
+                link = self._create_command_link(cmd_name)
+                self.file_list.add_item(link)
 
             # Re-attach adapter
             loop = asyncio.get_running_loop()

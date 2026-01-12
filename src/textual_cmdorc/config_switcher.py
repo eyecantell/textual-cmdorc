@@ -119,10 +119,10 @@ class ConfigSwitcher(Static):
             self._update_display()
             self.post_message(self.ConfigSelected(name))
 
-    def set_active(self, config_name: str) -> None:
+    def set_active_silently(self, config_name: str) -> None:
         """Set the active config without posting a message.
 
-        Used when the config is changed externally.
+        Used when the config is changed externally (e.g., from settings restore).
 
         Args:
             config_name: Name of the config to set as active
