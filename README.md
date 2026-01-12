@@ -7,6 +7,8 @@
 
 A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmdorc), displaying commands in a flat list with real-time status updates, manual controls, and file watching.
 
+![textual-cmdorc quick start demo](demos/quick-start.gif)
+
 **Key Design:** Clean architecture with two layers:
 - `CmdorcWidget`: Composable widget for embedding in multi-panel layouts
 - `CmdorcApp`: Standalone app (wraps CmdorcWidget with Header/Footer)
@@ -581,7 +583,7 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 - ✅ Config reload (live without restart)
 - ✅ CLI with auto-config generation
 - ✅ Logging infrastructure (file-based, silent by default)
-- ✅ 200 passing tests (75% coverage)
+- ✅ 360+ passing tests
 
 ### Known Limitations
 - No log pane (use terminal output instead)
@@ -592,10 +594,9 @@ This is simpler for 90% of use cases while still supporting headless/custom UI s
 
 MIT License. See [LICENSE](LICENSE) for details.
 
-## Todo
-- Currently if a command being run is cancelled by starting a new run (command on_retrigger = "cancel_and_restart") the command status shows as cancelled even tho the retriggered command is actually running the new run.  The command will then update once the run finishes. 
-- Test on mac
+## Known Issues
 
+- When a command is retriggered with `on_retrigger = "cancel_and_restart"`, the status briefly shows as cancelled before updating to show the new run. The final status is correct once the command completes.
 
 ## Contributing
 
