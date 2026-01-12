@@ -6,8 +6,8 @@ base_dir = "."
 
 # Optional: File watcher demo (comment out if not needed for demo)
 [[file_watcher]]
-dir = "./demos"
-extensions = [".txt"]
+dir = "."
+extensions = [".txt", ".py"]
 recursive = false
 trigger_emitted = "demo_file_changed"
 debounce_ms = 300
@@ -15,31 +15,31 @@ ignore_dirs = []
 
 [[command]]
 name = "Lint"
-command = "echo '🔍 Linting code...' && sleep 0.8 && echo '✅ No lint errors!'"
+command = "echo '🔍 Linting code...' && sleep 1 && echo '✅ No lint errors!'"
 triggers = ["manual", "demo_file_changed"]
 max_concurrent = 1
 
 [[command]]
 name = "Format"
-command = "echo '✨ Formatting code...' && sleep 0.6 && echo '✅ Code formatted!'"
+command = "echo '✨ Formatting code...' && sleep 2 && echo '✅ Code formatted!'"
 triggers = ["command_success:Lint"]
 max_concurrent = 1
 
 [[command]]
 name = "Build"
-command = "echo '🔨 Building project...' && sleep 1 && echo '✅ Build complete!'"
+command = "echo '🔨 Building project...' && sleep 3 && echo '✅ Build complete!'"
 triggers = ["command_success:Format"]
 max_concurrent = 1
 
 [[command]]
 name = "Test"
-command = "echo '🧪 Running tests...' && sleep 1.5 && echo '✅ All tests passed!'"
+command = "echo '🧪 Running tests...' && sleep 2 && echo '✅ All tests passed!'"
 triggers = ["command_success:Build"]
 max_concurrent = 1
 
 [[command]]
 name = "Deploy"
-command = "echo '🚀 Deploying to production...' && sleep 1 && echo '✅ Deployment successful!'"
+command = "echo '🚀 Deploying to production...' && sleep 4 && echo '✅ Deployment successful!'"
 triggers = ["command_success:Test"]
 max_concurrent = 1
 

@@ -1,9 +1,19 @@
 """Tests for WatcherStatusLine widget."""
 
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from textual_cmdorc.watcher_status_line import WatcherStatusLine
+
+
+@dataclass
+class MockWatcherConfig:
+    """Mock WatcherConfig for testing."""
+
+    dir: Path
+    extensions: list[str] | None = None
+    recursive: bool = True
 
 
 def test_status_line_initial_state_enabled():
@@ -198,3 +208,119 @@ def test_status_line_display_disabled_hides_file_info():
 
     # But display shows disabled (file info not shown when disabled)
     assert line.enabled is False
+
+
+# Tests for tooltip with watcher configs
+
+
+def test_tooltip_no_configs():
+    """Tooltip shows no watchers message when no configs provided."""
+    line = WatcherStatusLine(watcher_count=0, enabled=True, watcher_configs=None)
+
+    tooltip = line._build_watcher_tooltip()
+
+    assert tooltip == "No file watchers configured"
+
+
+def test_tooltip_empty_configs():
+    """Tooltip shows no watchers message when empty list provided."""
+    line = WatcherStatusLine(watcher_count=0, enabled=True, watcher_configs=[])
+
+    tooltip = line._build_watcher_tooltip()
+
+    assert tooltip == "No file watchers configured"
+
+
+def test_tooltip_single_watcher_recursive(monkeypatch):
+    """Tooltip shows single watcher with recursive indicator."""
+    # Mock cwd to be a known path
+    monkeypatch.setattr(Path, "cwd", lambda: Path("/project"))
+
+    config = MockWatcherConfig(
+        dir=Path("/project/src"),
+        extensions=[".py", ".txt"],
+        recursive=True,
+    )
+    line = WatcherStatusLine(watcher_count=1, enabled=True, watcher_configs=[config])
+
+    tooltip = line._build_watcher_tooltip()
+
+    assert "File Watchers:" in tooltip
+    assert "./src/**" in tooltip  # relative path with recursive indicator
+    assert ".py, .txt" in tooltip
+    assert "Click to toggle" in tooltip
+
+
+def test_tooltip_single_watcher_non_recursive(monkeypatch):
+    """Tooltip shows single watcher without recursive indicator."""
+    monkeypatch.setattr(Path, "cwd", lambda: Path("/project"))
+
+    config = MockWatcherConfig(
+        dir=Path("/project/src"),
+        extensions=[".py"],
+        recursive=False,
+    )
+    line = WatcherStatusLine(watcher_count=1, enabled=True, watcher_configs=[config])
+
+    tooltip = line._build_watcher_tooltip()
+
+    assert "./src" in tooltip
+    assert "./src/**" not in tooltip  # No recursive indicator
+
+
+def test_tooltip_watcher_all_extensions(monkeypatch):
+    """Tooltip shows * when no extensions filter."""
+    monkeypatch.setattr(Path, "cwd", lambda: Path("/project"))
+
+    config = MockWatcherConfig(
+        dir=Path("/project/src"),
+        extensions=None,  # Watch all files
+        recursive=True,
+    )
+    line = WatcherStatusLine(watcher_count=1, enabled=True, watcher_configs=[config])
+
+    tooltip = line._build_watcher_tooltip()
+
+    assert "[*]" in tooltip
+
+
+def test_tooltip_multiple_watchers(monkeypatch):
+    """Tooltip shows multiple watchers."""
+    monkeypatch.setattr(Path, "cwd", lambda: Path("/project"))
+
+    configs = [
+        MockWatcherConfig(
+            dir=Path("/project/src"),
+            extensions=[".py"],
+            recursive=True,
+        ),
+        MockWatcherConfig(
+            dir=Path("/project/tests"),
+            extensions=[".py", ".toml"],
+            recursive=False,
+        ),
+    ]
+    line = WatcherStatusLine(watcher_count=2, enabled=True, watcher_configs=configs)
+
+    tooltip = line._build_watcher_tooltip()
+
+    assert "./src/**" in tooltip
+    assert "[.py]" in tooltip
+    assert "./tests" in tooltip
+    assert "[.py, .toml]" in tooltip
+
+
+def test_tooltip_absolute_path_outside_cwd(monkeypatch):
+    """Tooltip shows absolute path for directories outside cwd."""
+    monkeypatch.setattr(Path, "cwd", lambda: Path("/project"))
+
+    config = MockWatcherConfig(
+        dir=Path("/other/location"),
+        extensions=[".py"],
+        recursive=True,
+    )
+    line = WatcherStatusLine(watcher_count=1, enabled=True, watcher_configs=[config])
+
+    tooltip = line._build_watcher_tooltip()
+
+    assert "/other/location/**" in tooltip  # Absolute path shown

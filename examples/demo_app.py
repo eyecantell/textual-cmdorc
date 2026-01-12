@@ -7,7 +7,7 @@ Uses the real cmdorc v0.2.1+ package and demonstrates all features:
 - Command execution (click tree nodes)
 - Tooltips on commands (via CmdorcView)
 - Auto-expanded tree
-- Log pane toggle
+- Log pane toggles
 """
 
 import sys

@@ -271,6 +271,7 @@ class CmdorcWidget(Widget):
                         watcher_count=watcher_count,
                         enabled=True,  # Start enabled
                         command_template=self.adapter.get_editor_command_template() if self.adapter else None,
+                        watcher_configs=self.adapter.get_watcher_configs() if self.adapter else None,
                     )
                     yield self.watcher_status
                 else:
@@ -830,6 +831,7 @@ class CmdorcWidget(Widget):
                     watcher_count=new_watcher_count,
                     enabled=True,
                     command_template=self.adapter.get_editor_command_template(),
+                    watcher_configs=self.adapter.get_watcher_configs(),
                 )
                 await main_container.mount(self.watcher_status, before=0)  # Mount at top
             elif old_watcher_count > 0 and new_watcher_count == 0:

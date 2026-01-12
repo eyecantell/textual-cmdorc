@@ -1,7 +1,10 @@
 """File watcher status line widget."""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from textual.containers import Vertical
 from textual.message import Message
@@ -10,6 +13,9 @@ from textual.widgets import Static
 from textual_filelink import FileLink
 
 from textual_cmdorc.formatting import format_time_ago
+
+if TYPE_CHECKING:
+    from cmdorc_frontend.watchers import WatcherConfig
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +60,7 @@ class WatcherStatusLine(Widget):
         watcher_count: int,
         enabled: bool = True,
         command_template: str | None = None,
+        watcher_configs: list[WatcherConfig] | None = None,
     ):
         """Initialize watcher status line.
 
@@ -61,6 +68,7 @@ class WatcherStatusLine(Widget):
             watcher_count: Number of configured file watchers
             enabled: Initial enabled state (default: True)
             command_template: Editor command template for FileLink clicks
+            watcher_configs: List of WatcherConfig for tooltip display
         """
         super().__init__()
         self.watcher_count = watcher_count
@@ -68,6 +76,7 @@ class WatcherStatusLine(Widget):
         self.last_file: Path | None = None
         self.last_file_time: float | None = None
         self._command_template = command_template
+        self._watcher_configs = watcher_configs or []
 
     def compose(self):
         """Compose the widget with status line and file info."""
@@ -88,8 +97,50 @@ class WatcherStatusLine(Widget):
         file_link = self.query_one("#watcher-file-link", FileLink)
         file_link.display = False
 
+        # Set tooltip on status text with watcher details
+        status_text = self.query_one("#watcher-status-text", Static)
+        status_text.tooltip = self._build_watcher_tooltip()
+
         self._update_display()
         self.set_interval(1.0, self._update_display)
+
+    def _build_watcher_tooltip(self) -> str:
+        """Build tooltip showing watched paths and extensions.
+
+        Returns:
+            Tooltip text with watcher details.
+        """
+        if not self._watcher_configs:
+            return "No file watchers configured"
+
+        lines = ["File Watchers:"]
+        cwd = Path.cwd()
+
+        for config in self._watcher_configs:
+            # Try to make path relative to cwd for readability
+            try:
+                display_path = config.dir.relative_to(cwd)
+                path_str = f"./{display_path}"
+            except ValueError:
+                # Path is not relative to cwd, use absolute
+                path_str = str(config.dir)
+
+            # Add recursive indicator
+            if config.recursive:
+                path_str += "/**"
+
+            # Build extensions string
+            if config.extensions:
+                ext_str = ", ".join(config.extensions)
+            else:
+                ext_str = "*"
+
+            lines.append(f"  {path_str} [{ext_str}]")
+
+        lines.append("")
+        lines.append("Click to toggle watchers on/off")
+
+        return "\n".join(lines)
 
     def _update_display(self) -> None:
         """Update status text based on current state."""

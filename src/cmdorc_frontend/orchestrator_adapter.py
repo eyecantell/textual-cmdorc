@@ -257,6 +257,14 @@ class OrchestratorAdapter:
         """
         return len(self._watchers)
 
+    def get_watcher_configs(self) -> list:
+        """Get file watcher configurations.
+
+        Returns:
+            List of WatcherConfig objects configured in TOML.
+        """
+        return list(self._watchers)
+
     def get_last_triggered_file(self) -> tuple[Path | None, float | None]:
         """Get the last file that triggered a watcher.
 

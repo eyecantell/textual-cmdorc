@@ -8,6 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install essential packages
 RUN apt-get update && apt-get install -y \
+    asciinema \
     curl \
     fonts-noto-color-emoji \
     fonts-noto-mono \
@@ -22,6 +23,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
     && locale-gen
+
+# Install agg (asciinema gif generator)
+RUN AGG_VERSION=1.5.0 && \
+    curl -fsSL "https://github.com/asciinema/agg/releases/download/v${AGG_VERSION}/agg-x86_64-unknown-linux-gnu" -o /usr/local/bin/agg && \
+    chmod +x /usr/local/bin/agg
 
 # Install Chrome dependencies (required by VHS for rendering)
 RUN apt-get update && apt-get install -y \
