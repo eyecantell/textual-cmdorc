@@ -9,12 +9,53 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install essential packages
 RUN apt-get update && apt-get install -y \
     curl \
+    fonts-noto-color-emoji \
+    fonts-noto-mono \
+    fonts-symbola \
     git \
+    locales \
     npm \
     sudo \
+    tmux \
     tree \
     vim \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen
+
+# Install Chrome dependencies (required by VHS for rendering)
+RUN apt-get update && apt-get install -y \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Install VHS from pre-built .deb package (includes all dependencies)
+RUN VHS_VERSION=0.8.0 && \
+    curl -fsSL "https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/vhs_${VHS_VERSION}_amd64.deb" -o /tmp/vhs.deb && \
+    apt-get update && \
+    apt-get install -y /tmp/vhs.deb && \
+    rm /tmp/vhs.deb && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install ttyd (required by VHS for terminal recording)
+RUN TTYD_VERSION=1.7.7 && \
+    curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64" -o /usr/local/bin/ttyd && \
+    chmod +x /usr/local/bin/ttyd
 
 # Create the developer user and set up permissions
 RUN useradd -s /bin/bash -m developer && \
@@ -22,7 +63,7 @@ RUN useradd -s /bin/bash -m developer && \
     echo "developer ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 # Add claude code globally
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code 
 
 # Install Language Servers (as root, globally available)
 # Python LSP
@@ -33,6 +74,9 @@ RUN npm install -g @vtsls/language-server typescript
 
 # Enable LSP tool for claude code
 ENV ENABLE_LSP_TOOL=1
+
+# Disable Chrome sandbox for VHS recording in container environment
+ENV VHS_NO_SANDBOX=true
 
 # Switch to developer user for remaining operations
 USER developer

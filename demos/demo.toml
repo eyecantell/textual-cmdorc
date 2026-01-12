@@ -1,0 +1,66 @@
+# Demo configuration for textual-cmdorc
+# This uses simple, fast commands to showcase features without long load times
+
+[variables]
+base_dir = "."
+
+# Optional: File watcher demo (comment out if not needed for demo)
+[[file_watcher]]
+dir = "./demos"
+extensions = [".txt"]
+recursive = false
+trigger_emitted = "demo_file_changed"
+debounce_ms = 300
+ignore_dirs = []
+
+[[command]]
+name = "Lint"
+command = "echo '🔍 Linting code...' && sleep 0.8 && echo '✅ No lint errors!'"
+triggers = ["manual", "demo_file_changed"]
+max_concurrent = 1
+
+[[command]]
+name = "Format"
+command = "echo '✨ Formatting code...' && sleep 0.6 && echo '✅ Code formatted!'"
+triggers = ["command_success:Lint"]
+max_concurrent = 1
+
+[[command]]
+name = "Build"
+command = "echo '🔨 Building project...' && sleep 1 && echo '✅ Build complete!'"
+triggers = ["command_success:Format"]
+max_concurrent = 1
+
+[[command]]
+name = "Test"
+command = "echo '🧪 Running tests...' && sleep 1.5 && echo '✅ All tests passed!'"
+triggers = ["command_success:Build"]
+max_concurrent = 1
+
+[[command]]
+name = "Deploy"
+command = "echo '🚀 Deploying to production...' && sleep 1 && echo '✅ Deployment successful!'"
+triggers = ["command_success:Test"]
+max_concurrent = 1
+
+[[command]]
+name = "Status"
+command = "echo '📊 System Status' && echo '---' && date && echo 'Uptime:' && uptime || echo 'Load: OK'"
+triggers = ["manual"]
+
+[[command]]
+name = "Logs"
+command = "echo '📜 Recent Activity:' && echo '---' && for i in 1 2 3 4 5; do echo \"[$(date +%H:%M:%S)] Log entry $i\"; sleep 0.2; done"
+triggers = ["manual"]
+
+[output_storage]
+directory = ".cmdorc/outputs"
+keep_history = 10
+
+[editor]
+command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"
+
+[keyboard]
+shortcuts = { Lint = "1", Format = "2", Build = "3", Test = "4", Deploy = "5", Status = "6", Logs = "7" }
+enabled = true
+show_in_tooltips = true

@@ -442,7 +442,7 @@ class CmdorcWidget(Widget):
                 self.call_later(self.watcher_status.set_last_file, file_path, timestamp)
         except Exception:
             # Ignore context errors during app shutdown or transitions
-            pass
+            logger.debug("Context error during lifecycle callback registration (shutdown/transition)")
 
     def _bind_keyboard_shortcuts(self) -> None:
         """Bind global keyboard shortcuts from config."""

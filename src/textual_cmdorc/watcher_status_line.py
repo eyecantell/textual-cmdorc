@@ -101,6 +101,7 @@ class WatcherStatusLine(Widget):
         try:
             _ = self.app
         except Exception:
+            logger.debug("App context not accessible (likely during shutdown)")
             return
 
         try:
@@ -108,6 +109,7 @@ class WatcherStatusLine(Widget):
             file_link = self.query_one("#watcher-file-link", FileLink)
         except Exception:
             # Widget not ready
+            logger.debug("Watcher status widgets not ready for query")
             return
 
         try:
@@ -135,7 +137,7 @@ class WatcherStatusLine(Widget):
                 file_link.display = False
         except Exception:
             # Context error (e.g., during app shutdown or from background thread)
-            pass
+            logger.debug("Context error during watcher status update (shutdown/transition)")
 
     def on_click(self) -> None:
         """Handle click - toggle state and post message."""

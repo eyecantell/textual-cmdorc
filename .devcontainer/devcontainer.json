@@ -32,6 +32,8 @@
         }
     },
     "remoteEnv": {
-        "ENABLE_LSP_TOOL": "1"
+        "ENABLE_LSP_TOOL": "1",
+        "GOPATH": "${containerEnv:HOME}/go",
+        "PATH": "${containerEnv:PATH}:${containerEnv:HOME}/go/bin"
     }
 }
