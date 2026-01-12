@@ -1,29 +1,47 @@
 """File watcher status line widget."""
 
+import logging
 from pathlib import Path
 
+from textual.containers import Vertical
 from textual.message import Message
+from textual.widget import Widget
 from textual.widgets import Static
+from textual_filelink import FileLink
 
 from textual_cmdorc.formatting import format_time_ago
 
+logger = logging.getLogger(__name__)
 
-class WatcherStatusLine(Static):
+
+class WatcherStatusLine(Widget):
     """Status line showing file watcher state with click-to-toggle.
 
     Displays the current state of file watchers and allows users to toggle
-    them on/off by clicking anywhere on the line or using a keyboard shortcut.
+    them on/off by clicking anywhere on the status line or using a keyboard shortcut.
 
-    Also shows the last file that triggered a watcher with a timer.
+    Also shows the last file that triggered a watcher with a clickable FileLink.
 
     Attributes:
         watcher_count: Number of configured file watchers
         enabled: Whether watchers are currently enabled
-        last_file: Path to the last file that triggered (relative)
+        last_file: Path to the last file that triggered
         last_file_time: Timestamp when the last file triggered
 
     Messages:
         Toggled: Posted when user clicks to toggle watchers
+    """
+
+    DEFAULT_CSS = """
+    WatcherStatusLine {
+        height: auto;
+    }
+    WatcherStatusLine #watcher-status-container {
+        height: auto;
+    }
+    WatcherStatusLine #watcher-file-link {
+        height: auto;
+    }
     """
 
     class Toggled(Message):
@@ -31,46 +49,103 @@ class WatcherStatusLine(Static):
 
         pass
 
-    def __init__(self, watcher_count: int, enabled: bool = True):
+    def __init__(
+        self,
+        watcher_count: int,
+        enabled: bool = True,
+        command_template: str | None = None,
+    ):
         """Initialize watcher status line.
 
         Args:
             watcher_count: Number of configured file watchers
             enabled: Initial enabled state (default: True)
+            command_template: Editor command template for FileLink clicks
         """
         super().__init__()
         self.watcher_count = watcher_count
         self.enabled = enabled
         self.last_file: Path | None = None
         self.last_file_time: float | None = None
+        self._command_template = command_template
+
+    def compose(self):
+        """Compose the widget with status line and file info."""
+        with Vertical(id="watcher-status-container"):
+            yield Static(id="watcher-status-text")
+            # FileLink directly in Vertical (no Horizontal wrapper)
+            # display_name will include prefix/suffix formatting
+            yield FileLink(
+                path=Path("/dev/null"),  # Placeholder
+                display_name="   (placeholder)",
+                id="watcher-file-link",
+                command_template=self._command_template,
+            )
+
+    def on_mount(self) -> None:
+        """Initialize display and start timer."""
+        # Hide FileLink initially (will show when file triggers)
+        file_link = self.query_one("#watcher-file-link", FileLink)
+        file_link.display = False
+
         self._update_display()
+        self.set_interval(1.0, self._update_display)
 
     def _update_display(self) -> None:
         """Update status text based on current state."""
-        if self.enabled:
-            text = f"👁️  File Watchers ({self.watcher_count}) Enabled"
-            # Add last triggered file info on second line if available
-            if self.last_file and self.last_file_time:
-                time_ago = format_time_ago(self.last_file_time)
-                # Try to get relative path, fall back to name
-                try:
-                    rel_path = self.last_file.relative_to(Path.cwd())
-                except ValueError:
-                    rel_path = self.last_file.name
-                text += f"\n   {rel_path} {time_ago}"
-        else:
-            text = "✗ File Watchers Disabled"
-        self.update(text)
+        # Only update if mounted and app is available
+        if not self.is_mounted:
+            return
 
-    def on_mount(self) -> None:
-        """Start timer to refresh the time display."""
-        self.set_interval(1.0, self._update_display)
+        # Check app context is accessible (may fail during shutdown)
+        try:
+            _ = self.app
+        except Exception:
+            return
+
+        try:
+            status_text = self.query_one("#watcher-status-text", Static)
+            file_link = self.query_one("#watcher-file-link", FileLink)
+        except Exception:
+            # Widget not ready
+            return
+
+        try:
+            if self.enabled:
+                status_text.update(f"👁️  File Watchers ({self.watcher_count}) Enabled")
+
+                # Show file info if available
+                if self.last_file and self.last_file_time:
+                    time_ago = format_time_ago(self.last_file_time)
+
+                    # Update FileLink with path and formatted display_name
+                    try:
+                        # Include prefix and time suffix in the display_name
+                        display_text = f"   ({self.last_file.name} {time_ago})"
+                        file_link.set_path(self.last_file, display_name=display_text)
+                        file_link.display = True
+                    except Exception as e:
+                        # Log the error to help debug
+                        logger.warning(f"FileLink update failed: {e}")
+                        file_link.display = False
+                else:
+                    file_link.display = False
+            else:
+                status_text.update("✗ File Watchers Disabled")
+                file_link.display = False
+        except Exception:
+            # Context error (e.g., during app shutdown or from background thread)
+            pass
 
     def on_click(self) -> None:
         """Handle click - toggle state and post message."""
         self.enabled = not self.enabled
         self._update_display()
         self.post_message(self.Toggled())
+
+    def on_file_link_clicked(self, event) -> None:
+        """Prevent FileLink clicks from toggling watchers."""
+        event.stop()
 
     def set_enabled(self, enabled: bool) -> None:
         """Update enabled state (called from parent widget).

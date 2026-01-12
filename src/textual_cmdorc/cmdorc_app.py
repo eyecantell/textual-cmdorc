@@ -256,7 +256,7 @@ class CmdorcWidget(Widget):
                 self.config_set is not None and len(self.config_set.configs) > 1 and self.active_config_name is not None
             )
 
-            with Vertical():
+            with Vertical(id="main-container"):
                 # Config switcher (only if multi-config with 2+ configs)
                 if show_switcher:
                     self.config_switcher = ConfigSwitcher(
@@ -270,6 +270,7 @@ class CmdorcWidget(Widget):
                     self.watcher_status = WatcherStatusLine(
                         watcher_count=watcher_count,
                         enabled=True,  # Start enabled
+                        command_template=self.adapter.get_editor_command_template() if self.adapter else None,
                     )
                     yield self.watcher_status
                 else:
@@ -409,17 +410,22 @@ class CmdorcWidget(Widget):
 
     def _poll_last_triggered_file(self) -> None:
         """Poll adapter for last triggered file and update watcher status line."""
-        if not self.adapter or not self.watcher_status:
-            return
+        try:
+            if not self.adapter or not self.watcher_status:
+                return
 
-        file_path, timestamp = self.adapter.get_last_triggered_file()
-        # Only update if we have new info (different from current)
-        if (
-            file_path
-            and timestamp
-            and (self.watcher_status.last_file != file_path or self.watcher_status.last_file_time != timestamp)
-        ):
-            self.watcher_status.set_last_file(file_path, timestamp)
+            file_path, timestamp = self.adapter.get_last_triggered_file()
+            # Only update if we have new info (different from current)
+            if (
+                file_path
+                and timestamp
+                and (self.watcher_status.last_file != file_path or self.watcher_status.last_file_time != timestamp)
+            ):
+                # Use call_later to ensure proper app context for widget updates
+                self.call_later(self.watcher_status.set_last_file, file_path, timestamp)
+        except Exception:
+            # Ignore context errors during app shutdown or transitions
+            pass
 
     def _bind_keyboard_shortcuts(self) -> None:
         """Bind global keyboard shortcuts from config."""
@@ -801,8 +807,9 @@ class CmdorcWidget(Widget):
                 id="commands-list",
             )
 
-            # Mount new list FIRST
-            await self.mount(self.file_list)
+            # Mount new list to the main container (not self) to preserve ordering
+            main_container = self.query_one("#main-container", Vertical)
+            await main_container.mount(self.file_list)
 
             # Track current source file for separators (multi-config only)
             current_source: Path | None = None
