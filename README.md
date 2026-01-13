@@ -7,7 +7,7 @@
 
 A simple, embeddable TUI frontend for [cmdorc](https://github.com/eyecantell/cmdorc), displaying commands in a flat list with real-time status updates, manual controls, and file watching.
 
-![textual-cmdorc quick start demo](demos/quick-start.gif)
+![textual-cmdorc quick start demo](https://raw.githubusercontent.com/eyecantell/textual-cmdorc/main/demos/quick-start.gif)
 
 **Key Design:** Clean architecture with two layers:
 - `CmdorcWidget`: Composable widget for embedding in multi-panel layouts
