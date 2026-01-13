@@ -130,10 +130,7 @@ class WatcherStatusLine(Widget):
                 path_str += "/**"
 
             # Build extensions string
-            if config.extensions:
-                ext_str = ", ".join(config.extensions)
-            else:
-                ext_str = "*"
+            ext_str = ", ".join(config.extensions) if config.extensions else "*"
 
             lines.append(f"  {path_str} [{ext_str}]")
 
