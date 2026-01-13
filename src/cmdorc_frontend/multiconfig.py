@@ -19,7 +19,10 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import tomllib
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore
 from cmdorc import RunnerConfig, load_configs
 
 logger = logging.getLogger(__name__)
