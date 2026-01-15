@@ -208,3 +208,6 @@ __marimo__/
 
 # cmdorc data directory (logs and command outputs)
 .cmdorc/
+
+# Claude Code settings (persisted in devcontainer)
+.claude-data/

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from textual.events import Click
 from textual.message import Message
 from textual.widgets import Static
 
@@ -21,7 +22,7 @@ class ConfigSwitcher(Static):
 
     DEFAULT_CSS = """
     ConfigSwitcher {
-        height: 1;
+        height: auto;
         width: 100%;
         padding: 0 1;
         background: $surface;
@@ -96,12 +97,23 @@ class ConfigSwitcher(Static):
             # Show compact view
             self.update(f"Config: {self._active_name} [Switch ▼]")
 
-    def on_click(self) -> None:
+    def on_click(self, event: Click) -> None:
         """Handle click - toggle dropdown or select config."""
         if self._dropdown_open:
-            # Close dropdown without selection
-            self._dropdown_open = False
-            self._update_display()
+            # Dropdown is open - detect which config was clicked by y position
+            clicked_index = event.y
+            if 0 <= clicked_index < len(self._config_names):
+                clicked_name = self._config_names[clicked_index]
+                if clicked_name != self._active_name:
+                    self.select_config(clicked_name)
+                else:
+                    # Clicked on already-selected item, just close
+                    self._dropdown_open = False
+                    self._update_display()
+            else:
+                # Clicked outside valid options, close dropdown
+                self._dropdown_open = False
+                self._update_display()
         else:
             # Open dropdown
             self._dropdown_open = True

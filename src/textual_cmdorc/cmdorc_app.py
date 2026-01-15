@@ -383,7 +383,9 @@ class CmdorcWidget(Widget):
                         cmd_source = self.adapter.get_command_source(cmd_name)
                         if cmd_source and cmd_source != current_source:
                             current_source = cmd_source
-                            separator = FileSeparator(cmd_source.name)
+                            # Generate unique ID from filename (sanitize for widget ID)
+                            sep_id = f"sep-{cmd_source.stem}".replace(" ", "-").replace(".", "-")
+                            separator = FileSeparator(cmd_source.name, id=sep_id)
                             self.file_list.add_item(separator)
                     # Create and add command link
                     link = self._create_command_link(cmd_name)
@@ -796,6 +798,9 @@ class CmdorcWidget(Widget):
             tuple: (success: bool, message: str)
         """
         logger.info("Reloading configuration...")
+        # DEBUG: Write to temp file
+        with open("/tmp/reload_debug.log", "a") as f:
+            f.write(f"=== RELOAD START config_paths={self.config_paths} ===\n")
 
         try:
             # Detach old adapter
@@ -822,7 +827,7 @@ class CmdorcWidget(Widget):
             self.tooltip_builder = TooltipBuilder(self.adapter)
 
             # Get new watcher count and update WatcherStatusLine if needed
-            new_watcher_count = self.adapter.count_watchers() if self.adapter else 0
+            new_watcher_count = self.adapter.get_watcher_count() if self.adapter else 0
             main_container = self.query_one("#main-container", Vertical)
 
             if old_watcher_count == 0 and new_watcher_count > 0:
@@ -859,17 +864,24 @@ class CmdorcWidget(Widget):
             show_separators = len(self.config_paths) > 1
 
             # THEN populate it (after mounting)
-            for cmd_name in self.adapter.get_command_names():
+            cmd_names = self.adapter.get_command_names()
+            with open("/tmp/reload_debug.log", "a") as f:
+                f.write(f"Adding {len(cmd_names)} commands: {cmd_names}\n")
+            for cmd_name in cmd_names:
                 # Add file separator if source changed (multi-config mode)
                 if show_separators:
                     cmd_source = self.adapter.get_command_source(cmd_name)
                     if cmd_source and cmd_source != current_source:
                         current_source = cmd_source
-                        separator = FileSeparator(cmd_source.name)
+                        # Generate unique ID from filename (sanitize for widget ID)
+                        sep_id = f"sep-{cmd_source.stem}".replace(" ", "-").replace(".", "-")
+                        separator = FileSeparator(cmd_source.name, id=sep_id)
                         self.file_list.add_item(separator)
                 # Create and add command link
                 link = self._create_command_link(cmd_name)
                 self.file_list.add_item(link)
+            with open("/tmp/reload_debug.log", "a") as f:
+                f.write(f"file_list now has {len(self.file_list.get_items())} items\n")
 
             # Re-attach adapter
             loop = asyncio.get_running_loop()
@@ -900,10 +912,16 @@ class CmdorcWidget(Widget):
             self._bind_keyboard_shortcuts()
 
             logger.info("Configuration reloaded successfully")
+            with open("/tmp/reload_debug.log", "a") as f:
+                f.write("=== RELOAD SUCCESS ===\n")
             return True, "Configuration reloaded"
 
         except Exception as e:
-            logger.error(f"Failed to reload config: {e}")
+            logger.error(f"Failed to reload config: {e}", exc_info=True)
+            with open("/tmp/reload_debug.log", "a") as f:
+                import traceback
+                f.write(f"ERROR: {e}\n")
+                f.write(traceback.format_exc())
             return False, f"Failed to reload: {e}"
 
     def get_keyboard_shortcuts(self) -> dict[str, str]:

@@ -229,6 +229,8 @@ class TestConfigSwitcherDropdown:
 
     def test_click_toggles_dropdown(self):
         """Clicking toggles dropdown state."""
+        from unittest.mock import MagicMock
+
         switcher = ConfigSwitcher(
             config_names=["Dev", "Prod"],
             active_name="Dev",
@@ -237,10 +239,64 @@ class TestConfigSwitcherDropdown:
         # Initially closed
         assert not switcher._dropdown_open
 
-        # Click opens
-        switcher.on_click()
+        # Create mock click event
+        mock_event = MagicMock()
+        mock_event.y = 0
+
+        # Click opens (when closed, y doesn't matter)
+        switcher.on_click(mock_event)
         assert switcher._dropdown_open
 
-        # Click closes
-        switcher.on_click()
+        # Click outside valid range closes (y=-1 is invalid)
+        mock_event.y = -1
+        switcher.on_click(mock_event)
         assert not switcher._dropdown_open
+
+    def test_click_selects_config(self):
+        """Clicking on a config in dropdown selects it."""
+        from unittest.mock import MagicMock
+
+        messages = []
+        switcher = ConfigSwitcher(
+            config_names=["Dev", "Prod", "Test"],
+            active_name="Dev",
+        )
+        switcher.post_message = lambda msg: messages.append(msg)
+
+        # Open dropdown
+        mock_event = MagicMock()
+        mock_event.y = 0
+        switcher.on_click(mock_event)
+        assert switcher._dropdown_open
+
+        # Click on Prod (y=1)
+        mock_event.y = 1
+        switcher.on_click(mock_event)
+        assert not switcher._dropdown_open
+        assert switcher.active_name == "Prod"
+        assert len(messages) == 1
+        assert messages[0].config_name == "Prod"
+
+    def test_click_same_config_closes(self):
+        """Clicking on the already-active config just closes dropdown."""
+        from unittest.mock import MagicMock
+
+        messages = []
+        switcher = ConfigSwitcher(
+            config_names=["Dev", "Prod"],
+            active_name="Dev",
+        )
+        switcher.post_message = lambda msg: messages.append(msg)
+
+        # Open dropdown
+        mock_event = MagicMock()
+        mock_event.y = 0
+        switcher.on_click(mock_event)
+        assert switcher._dropdown_open
+
+        # Click on Dev (y=0, same as active)
+        mock_event.y = 0
+        switcher.on_click(mock_event)
+        assert not switcher._dropdown_open
+        assert switcher.active_name == "Dev"
+        assert len(messages) == 0  # No message since same config

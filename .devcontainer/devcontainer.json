@@ -14,9 +14,14 @@
             "source": "${localEnv:HOME}${localEnv:USERPROFILE}/stuff_for_containers_home",
             "target": "/mounted/stuff_for_containers_home",
             "type": "bind"
+        },
+        {
+            "type": "bind",
+            "source": "${localWorkspaceFolder}/.claude-data",
+            "target": "/home/developer/.claude"
         }
     ],
-    "postCreateCommand": "mkdir -p ~/.claude && ln -sf /mounted/dev/claude_settings/settings.json ~/.claude/settings.json && cd /mounted/dev/textual-cmdorc && pdm install -G test -G dev",
+    "postCreateCommand": "cd /mounted/dev/textual-cmdorc && pdm install -G test -G dev",
     "customizations": {
         "vscode": {
             "extensions": [
