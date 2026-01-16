@@ -1,6 +1,6 @@
 [project]
 name = "textual-cmdorc"
-version = "0.1.0"
+version = "0.2.0"
 description = "Embeddable TUI frontend for cmdorc command orchestration with real-time status, keyboard shortcuts, and trigger chains."
 readme = "README.md"
 authors = [

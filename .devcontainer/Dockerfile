@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     fonts-noto-color-emoji \
     fonts-noto-mono \
     fonts-symbola \
+    gh \
     git \
     locales \
     npm \
