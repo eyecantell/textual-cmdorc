@@ -1,6 +1,6 @@
 """cmdorc-frontend: Shared models and utilities for cmdorc frontends."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 # Models
 # Config
