@@ -1,32 +1,28 @@
-"""cmdorc-frontend: Shared models and utilities for cmdorc frontends."""
+"""textual-cmdorc: Embeddable TUI frontend for cmdorc command orchestration."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
-# Models
-# Config
-from cmdorc_frontend.config import load_frontend_config
-from cmdorc_frontend.models import (
-    VALID_KEYS,
-    CommandNode,
-    ConfigValidationResult,
-    EditorConfig,
-    KeyboardConfig,
-    PresentationUpdate,
-    TriggerSource,
-    map_run_state_to_icon,
+# Public API
+from cmdorc_frontend.orchestrator_adapter import OrchestratorAdapter
+from textual_cmdorc.cmdorc_app import CmdorcApp, CmdorcWidget
+from textual_cmdorc.logging import (
+    disable_logging,
+    get_log_file_path,
+    get_logger,
+    setup_logging,
 )
+from textual_cmdorc.watcher_status_line import WatcherStatusLine
 
 __all__ = [
     "__version__",
-    # Models
-    "CommandNode",
-    "TriggerSource",
-    "PresentationUpdate",
-    "ConfigValidationResult",
-    "EditorConfig",
-    "KeyboardConfig",
-    "VALID_KEYS",
-    "map_run_state_to_icon",
-    # Config
-    "load_frontend_config",
+    # Primary components
+    "CmdorcApp",  # Standalone app with Header/Footer
+    "CmdorcWidget",  # Composable widget for embedding
+    "OrchestratorAdapter",  # Framework-agnostic backend
+    "WatcherStatusLine",  # File watcher status widget
+    # Logging utilities
+    "setup_logging",
+    "disable_logging",
+    "get_logger",
+    "get_log_file_path",
 ]
