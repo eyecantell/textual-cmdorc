@@ -23,6 +23,7 @@
             "type": "bind"
         }
     ],
+    "remoteUser": "developer",
     "postCreateCommand": "mkdir -p /mounted/dev/.claude-textual-cmdorc && ln -sf /mounted/dev/.claude-textual-cmdorc ~/.claude && pdm install -G test -G dev",
     "customizations": {
         "vscode": {
@@ -30,7 +31,8 @@
                 "ms-azuretools.vscode-docker",
                 "ms-python.python",
                 "github.vscode-github-actions",
-                "be5invis.toml"
+                "be5invis.toml",
+                "charliermarsh.ruff"
             ],
             "settings": {
                 "python.defaultInterpreterPath": "/usr/local/bin/python",
@@ -39,8 +41,6 @@
         }
     },
     "remoteEnv": {
-        "ENABLE_LSP_TOOL": "1",
-        "GOPATH": "${containerEnv:HOME}/go",
-        "PATH": "${containerEnv:PATH}:${containerEnv:HOME}/go/bin"
+        "ENABLE_LSP_TOOL": "1"
     }
 }
