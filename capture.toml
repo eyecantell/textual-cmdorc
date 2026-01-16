@@ -1,6 +1,6 @@
 app_module = "textual_cmdorc.cmdorc_app"
 app_class = "CmdorcApp"
-module_path = "/mounted/dev/textual-cmdorc/src/textual_cmdorc"
+module_path = "/workspaces/textual-cmdorc/src/textual_cmdorc"
 
 [[step]]
 type = "capture"

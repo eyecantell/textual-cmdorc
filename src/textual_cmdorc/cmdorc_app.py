@@ -25,7 +25,7 @@ from pathlib import Path
 from cmdorc import RunHandle
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Footer, Header, Static
@@ -113,6 +113,11 @@ class CmdorcWidget(Widget):
         width: 1fr;
     }
 
+    #main-container {
+        height: 100%;
+        width: 100%;
+    }
+
     ConfigSwitcher {
         height: 1;
         width: 100%;
@@ -150,9 +155,15 @@ class CmdorcWidget(Widget):
         padding: 0 1;
     }
 
-    FileLinkList {
+    #commands-scroll {
         height: 1fr;
         border: solid $accent;
+        overflow-y: auto;
+        scrollbar-size-vertical: 2;
+    }
+
+    FileLinkList {
+        height: auto;
     }
 
     CommandLink {
@@ -277,7 +288,8 @@ class CmdorcWidget(Widget):
                 else:
                     self.watcher_status = None
 
-                yield self.file_list
+                with VerticalScroll(id="commands-scroll"):
+                    yield self.file_list
 
         except Exception as e:
             # Fatal config error
@@ -810,9 +822,9 @@ class CmdorcWidget(Widget):
             # Store old watcher count for comparison
             old_watcher_count = self.watcher_status.watcher_count if self.watcher_status else 0
 
-            # Remove old command list and wait for removal to complete
-            if self.file_list:
-                await self.file_list.remove()
+            # Remove old scroll container (which contains the file_list)
+            scroll_container = self.query_one("#commands-scroll", VerticalScroll)
+            await scroll_container.remove()
 
             # Recreate adapter with new config (single or multi-config)
             if len(self.config_paths) == 1:
@@ -853,8 +865,10 @@ class CmdorcWidget(Widget):
                 id="commands-list",
             )
 
-            # Mount new list to the main container (not self) to preserve ordering
-            await main_container.mount(self.file_list)
+            # Create new scroll container and mount it with the file_list
+            new_scroll = VerticalScroll(id="commands-scroll")
+            await main_container.mount(new_scroll)
+            await new_scroll.mount(self.file_list)
 
             # Track current source file for separators (multi-config only)
             current_source: Path | None = None
