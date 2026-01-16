@@ -32,6 +32,10 @@ class ConfigSwitcher(Static):
         background: $surface-darken-1;
     }
 
+    ConfigSwitcher.single-config:hover {
+        background: $surface;
+    }
+
     ConfigSwitcher .config-name {
         color: $accent;
         text-style: bold;
@@ -73,6 +77,8 @@ class ConfigSwitcher(Static):
         self._active_name = active_name
         self._dropdown_open = False
         self._update_display()
+        if len(self._config_names) == 1:
+            self.add_class("single-config")
 
     @property
     def active_name(self) -> str:
@@ -86,7 +92,10 @@ class ConfigSwitcher(Static):
 
     def _update_display(self) -> None:
         """Update the display text."""
-        if self._dropdown_open:
+        if len(self._config_names) == 1:
+            # Single config - show as static label (no dropdown indicator)
+            self.update(f"Config: {self._active_name}")
+        elif self._dropdown_open:
             # Show dropdown with all configs
             lines = []
             for name in self._config_names:
@@ -94,11 +103,14 @@ class ConfigSwitcher(Static):
                 lines.append(f"  {marker} {name}")
             self.update("\n".join(lines))
         else:
-            # Show compact view
+            # Show compact view with dropdown indicator
             self.update(f"Config: {self._active_name} [Switch ▼]")
 
     def on_click(self, event: Click) -> None:
         """Handle click - toggle dropdown or select config."""
+        if len(self._config_names) <= 1:
+            return  # No switching with single config
+
         if self._dropdown_open:
             # Dropdown is open - detect which config was clicked by y position
             clicked_index = event.y

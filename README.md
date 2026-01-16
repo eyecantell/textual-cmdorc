@@ -57,7 +57,13 @@ pip install textual-cmdorc
 # Auto-generate config.toml and launch
 cmdorc-tui
 
-# Or use custom config
+# Use single config file
+cmdorc-tui dev.toml
+
+# Multiple files = switchable configs (shows dropdown)
+cmdorc-tui dev.toml deploy.toml
+
+# Or use --config flag for named configs
 cmdorc-tui --config my-config.toml
 ```
 

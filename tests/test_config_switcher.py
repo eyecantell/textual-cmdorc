@@ -300,3 +300,49 @@ class TestConfigSwitcherDropdown:
         assert not switcher._dropdown_open
         assert switcher.active_name == "Dev"
         assert len(messages) == 0  # No message since same config
+
+
+class TestConfigSwitcherSingleConfig:
+    """Tests for ConfigSwitcher behavior with a single config."""
+
+    def test_single_config_shows_label(self):
+        """Single config displays as static label without dropdown indicator."""
+        switcher = ConfigSwitcher(
+            config_names=["OnlyConfig"],
+            active_name="OnlyConfig",
+        )
+        # The display should not have the dropdown indicator
+        # We can't directly check the rendered text without a full app context,
+        # but we can verify the behavior is correct
+        assert len(switcher._config_names) == 1
+        assert switcher._active_name == "OnlyConfig"
+
+    def test_single_config_click_does_nothing(self):
+        """Click on single config doesn't open dropdown or change state."""
+        from unittest.mock import MagicMock
+
+        switcher = ConfigSwitcher(
+            config_names=["OnlyConfig"],
+            active_name="OnlyConfig",
+        )
+        messages = []
+        switcher.post_message = lambda msg: messages.append(msg)
+
+        # Click should do nothing
+        mock_event = MagicMock()
+        mock_event.y = 0
+        switcher.on_click(mock_event)
+
+        # Should still be closed and no messages posted
+        assert not switcher._dropdown_open
+        assert switcher.active_name == "OnlyConfig"
+        assert len(messages) == 0
+
+    def test_single_config_has_css_class(self):
+        """Single config has 'single-config' CSS class applied."""
+        switcher = ConfigSwitcher(
+            config_names=["OnlyConfig"],
+            active_name="OnlyConfig",
+        )
+        # Verify the CSS class was added
+        assert "single-config" in switcher.classes

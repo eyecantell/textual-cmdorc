@@ -615,3 +615,118 @@ class TestDefaultConfigTemplate:
             # Verify output_storage config (prevents regression where outputs aren't persisted)
             assert runner_config.output_storage is not None
             assert runner_config.output_storage.keep_history >= 1, "keep_history must be >= 1 to persist outputs"
+
+
+class TestPositionalConfigFiles:
+    """Tests for positional config file arguments."""
+
+    def test_parse_args_single_positional_file(self):
+        """Test parsing single positional config file."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "dev.toml"]):
+            args = parse_args()
+            assert args.config_files == ["dev.toml"]
+            assert args.config is None
+
+    def test_parse_args_multiple_positional_files(self):
+        """Test parsing multiple positional config files."""
+        with patch.object(sys, "argv", ["cmdorc-tui", "dev.toml", "deploy.toml"]):
+            args = parse_args()
+            assert args.config_files == ["dev.toml", "deploy.toml"]
+            assert args.config is None
+
+    def test_positional_and_config_flag_conflict(self):
+        """Test error when both positional args and --config flag are used."""
+        with TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "dev.toml"
+            create_default_config(config_path)
+
+            with (
+                patch.object(sys, "argv", ["cmdorc-tui", str(config_path), "--config", "foo"]),
+                patch("sys.stderr", new_callable=StringIO) as mock_stderr,
+                pytest.raises(SystemExit) as exc_info,
+            ):
+                main()
+
+            assert exc_info.value.code == 1
+            stderr_output = mock_stderr.getvalue()
+            assert "Cannot use --config with positional file arguments" in stderr_output
+
+    def test_positional_nonexistent_file_error(self):
+        """Test error for nonexistent config file."""
+        with (
+            patch.object(sys, "argv", ["cmdorc-tui", "nonexistent.toml"]),
+            patch("sys.stderr", new_callable=StringIO) as mock_stderr,
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main()
+
+        assert exc_info.value.code == 1
+        stderr_output = mock_stderr.getvalue()
+        assert "Config file not found: nonexistent.toml" in stderr_output
+
+    def test_positional_non_toml_extension_error(self):
+        """Test error for non-.toml file extension."""
+        with (
+            patch.object(sys, "argv", ["cmdorc-tui", "config.yaml"]),
+            patch("sys.stderr", new_callable=StringIO) as mock_stderr,
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main()
+
+        assert exc_info.value.code == 1
+        stderr_output = mock_stderr.getvalue()
+        assert "Config file must have .toml extension: config.yaml" in stderr_output
+
+    def test_positional_duplicate_names_handled(self):
+        """Test handling of duplicate config names from different directories."""
+        with TemporaryDirectory() as tmpdir:
+            # Create two dev.toml files in different directories
+            dir_a = Path(tmpdir) / "a"
+            dir_b = Path(tmpdir) / "b"
+            dir_a.mkdir()
+            dir_b.mkdir()
+
+            config_a = dir_a / "dev.toml"
+            config_b = dir_b / "dev.toml"
+            create_default_config(config_a)
+            create_default_config(config_b)
+
+            with (
+                patch.object(sys, "argv", ["cmdorc-tui", str(config_a), str(config_b)]),
+                patch("textual_cmdorc.cli.CmdorcApp") as mock_app,
+            ):
+                mock_instance = MagicMock()
+                mock_app.return_value = mock_instance
+
+                main()
+
+                # Verify CmdorcApp was called with ConfigSet
+                mock_app.assert_called_once()
+                call_kwargs = mock_app.call_args.kwargs
+
+                assert "config_set" in call_kwargs
+                assert "active_config_name" in call_kwargs
+
+                # Check that names are unique
+                config_set = call_kwargs["config_set"]
+                names = [c.name for c in config_set.configs]
+                assert len(names) == 2
+                assert names[0] == "dev"
+                assert names[1] == "dev_1"
+
+    def test_positional_duplicate_paths_error(self):
+        """Test error when same file is specified twice."""
+        with TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "dev.toml"
+            create_default_config(config_path)
+
+            with (
+                patch.object(sys, "argv", ["cmdorc-tui", str(config_path), str(config_path)]),
+                patch("sys.stderr", new_callable=StringIO) as mock_stderr,
+                pytest.raises(SystemExit) as exc_info,
+            ):
+                main()
+
+            assert exc_info.value.code == 1
+            stderr_output = mock_stderr.getvalue()
+            assert "Duplicate config file specified" in stderr_output

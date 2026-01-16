@@ -11,6 +11,7 @@ from cmdorc_frontend.config_discovery import (
     generate_cmdorc_tui_toml,
     resolve_startup_config,
 )
+from cmdorc_frontend.multiconfig import ConfigSet, NamedConfig
 from textual_cmdorc import __version__
 from textual_cmdorc.cmdorc_app import CmdorcApp
 
@@ -97,7 +98,8 @@ def parse_args() -> argparse.Namespace:
         description="A TUI frontend for cmdorc command orchestration.",
         epilog="Examples:\n"
         "  cmdorc-tui                         # Auto-detect config and launch\n"
-        "  cmdorc-tui --config my-flow.toml   # Use specific config file\n"
+        "  cmdorc-tui dev.toml                # Use specific config file\n"
+        "  cmdorc-tui dev.toml deploy.toml    # Multiple switchable configs\n"
         "  cmdorc-tui --config Development    # Use named config from cmdorc-tui.toml\n"
         "  cmdorc-tui --list-configs          # List available named configs\n"
         "  cmdorc-tui --validate              # Validate cmdorc-tui.toml\n"
@@ -162,6 +164,13 @@ def parse_args() -> argparse.Namespace:
         "--verbose",
         action="store_true",
         help="Alias for --log-file (backward compatibility)",
+    )
+
+    parser.add_argument(
+        "config_files",
+        nargs="*",
+        metavar="CONFIG_FILE",
+        help="Config file path(s). Multiple files create switchable configs.",
     )
 
     return parser.parse_args()
@@ -288,6 +297,60 @@ def main() -> None:
 
         if args.init_configs:
             sys.exit(handle_init_configs())
+
+        # Handle positional config files
+        if args.config_files:
+            # Conflict check
+            if args.config:
+                print("Error: Cannot use --config with positional file arguments", file=sys.stderr)
+                print("Use either: cmdorc-tui file1.toml file2.toml", file=sys.stderr)
+                print("       or: cmdorc-tui --config <name-or-path>", file=sys.stderr)
+                sys.exit(1)
+
+            # Validate all files exist and have .toml extension
+            config_paths = []
+            for f in args.config_files:
+                path = Path(f)
+                if path.suffix != ".toml":
+                    print(f"Error: Config file must have .toml extension: {f}", file=sys.stderr)
+                    sys.exit(1)
+                if not path.exists():
+                    print(f"Error: Config file not found: {f}", file=sys.stderr)
+                    sys.exit(1)
+                config_paths.append(path.resolve())
+
+            # Check for duplicate paths
+            if len(config_paths) != len(set(config_paths)):
+                print("Error: Duplicate config file specified", file=sys.stderr)
+                sys.exit(1)
+
+            # Generate config names from filenames (handle duplicate names)
+            seen: dict[str, int] = {}
+            unique_names = []
+            for p in config_paths:
+                name = p.stem
+                if name in seen:
+                    seen[name] += 1
+                    unique_names.append(f"{name}_{seen[name]}")
+                else:
+                    seen[name] = 0
+                    unique_names.append(name)
+
+            # Create ConfigSet (works for both single and multiple files)
+            # ConfigSwitcher will show as label for single, dropdown for multiple
+            named_configs = [
+                NamedConfig(name=name, files=[path])
+                for name, path in zip(unique_names, config_paths)
+            ]
+            config_set = ConfigSet(configs=named_configs)
+
+            # Launch with config set
+            app = CmdorcApp(
+                config_set=config_set,
+                active_config_name=unique_names[0],
+            )
+            app.run()
+            return
 
         # Discover configs
         discovery = discover_config()

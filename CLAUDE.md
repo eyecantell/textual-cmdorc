@@ -38,7 +38,11 @@ pdm run mypy src/
 # Run standalone TUI
 pdm run cmdorc-tui
 
-# Or with custom config
+# Or with config files (positional arguments)
+pdm run cmdorc-tui dev.toml
+pdm run cmdorc-tui dev.toml deploy.toml  # Multiple = switchable configs
+
+# Or with --config flag
 pdm run cmdorc-tui --config=config.toml
 
 # Run with logging enabled
@@ -154,6 +158,8 @@ files = ["./build.toml"]
 - `cmdorc-tui --validate` - Validate cmdorc-tui.toml
 - `cmdorc-tui --init-configs` - Auto-generate from existing TOML files
 - `cmdorc-tui --config "Development"` - Start with named config
+- `cmdorc-tui dev.toml` - Single config file (shows static label)
+- `cmdorc-tui dev.toml deploy.toml` - Multiple config files (shows dropdown switcher)
 
 **Settings Persistence:**
 - Active config saved in `.cmdorc/settings.json`
