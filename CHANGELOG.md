@@ -5,6 +5,17 @@ All notable changes to textual-cmdorc are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.2.1]
+
+### Fixed
+- Commands not displaying on startup due to `FileLinkList` evaluating to `False` when empty (now uses explicit `is None` checks)
+
+### Changed
+- Refactored `reload_config()` to keep widget containers and clear contents instead of removing/recreating DOM structure (prevents structural divergence)
+- Extracted shared helpers: `_create_adapter()`, `_populate_command_list()`, `_wire_callbacks()` for use by both `on_mount()` and `reload_config()`
+
 ## [0.2.0]
 
 ### Added
