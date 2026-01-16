@@ -1,0 +1,34 @@
+# Build workflow: Compile -> Package -> Verify
+# For creating distributable artifacts
+
+[variables]
+build_dir = "./dist"
+
+[[command]]
+name = "Clean"
+command = "echo '🧹 Cleaning build directory...' && sleep 0.5 && echo '✅ Clean!'"
+triggers = ["manual"]
+max_concurrent = 1
+
+[[command]]
+name = "Compile"
+command = "echo '⚙️ Compiling source...' && sleep 2 && echo '  Processed 127 files' && echo '✅ Compilation complete!'"
+triggers = ["manual", "command_success:Clean"]
+max_concurrent = 1
+
+[[command]]
+name = "Package"
+command = "echo '📦 Packaging artifacts...' && sleep 2.5 && echo '  Creating wheel...' && sleep 1 && echo '✅ Package created: dist/app-1.0.0.whl'"
+triggers = ["command_success:Compile"]
+max_concurrent = 1
+
+[[command]]
+name = "Verify"
+command = "echo '🔒 Verifying package...' && sleep 1 && echo '  Checking signatures...' && echo '  Validating contents...' && echo '✅ Package verified!'"
+triggers = ["command_success:Package"]
+max_concurrent = 1
+
+[keyboard]
+shortcuts = { Clean = "c", Compile = "1", Package = "2", Verify = "3" }
+enabled = true
+show_in_tooltips = true

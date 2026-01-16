@@ -1,0 +1,31 @@
+# Utility commands: Status, Logs, Health checks
+# Useful monitoring and debugging tools
+
+[[command]]
+name = "Status"
+command = "echo '📊 System Status' && echo '─────────────────' && date && echo '' && echo 'Uptime:' && uptime 2>/dev/null || echo '  System running' && echo '' && echo 'Memory:' && free -h 2>/dev/null | head -2 || echo '  Memory OK'"
+triggers = ["manual"]
+max_concurrent = 1
+
+[[command]]
+name = "Logs"
+command = "echo '📜 Recent Activity:' && echo '─────────────────' && for i in 1 2 3 4 5; do echo \"[$(date +%H:%M:%S)] Log entry $i - Operation completed\"; sleep 0.3; done"
+triggers = ["manual"]
+max_concurrent = 1
+
+[[command]]
+name = "Health Check"
+command = "echo '💓 Health Check' && echo '─────────────────' && echo '  API Server: ✅' && sleep 0.5 && echo '  Database: ✅' && sleep 0.5 && echo '  Cache: ✅' && sleep 0.5 && echo '  Queue: ✅' && echo '' && echo '✅ All systems healthy!'"
+triggers = ["manual"]
+max_concurrent = 1
+
+[[command]]
+name = "Disk Usage"
+command = "echo '💾 Disk Usage' && echo '─────────────────' && df -h . 2>/dev/null || echo 'Disk: OK'"
+triggers = ["manual"]
+max_concurrent = 1
+
+[keyboard]
+shortcuts = { Status = "s", Logs = "l", "Health Check" = "h", "Disk Usage" = "d" }
+enabled = true
+show_in_tooltips = true

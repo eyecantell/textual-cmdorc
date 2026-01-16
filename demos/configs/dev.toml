@@ -1,0 +1,42 @@
+# Development workflow: Lint -> Format -> Test
+# Fast feedback loop for code quality
+
+[variables]
+src_dir = "./src"
+
+[[file_watcher]]
+dir = "./src"
+extensions = [".py"]
+recursive = true
+trigger_emitted = "py_changed"
+debounce_ms = 500
+ignore_dirs = ["__pycache__", ".pytest_cache"]
+
+[[command]]
+name = "Lint"
+command = "echo '🔍 Linting code...' && sleep 1 && echo '✅ No lint errors found!'"
+triggers = ["manual", "py_changed"]
+max_concurrent = 1
+
+[[command]]
+name = "Format"
+command = "echo '✨ Formatting code...' && sleep 1.5 && echo '✅ Code formatted!'"
+triggers = ["command_success:Lint"]
+max_concurrent = 1
+
+[[command]]
+name = "Test"
+command = "echo '🧪 Running tests...' && sleep 2 && echo '  Running 42 tests...' && sleep 1 && echo '✅ All 42 tests passed!'"
+triggers = ["command_success:Format"]
+max_concurrent = 1
+
+[[command]]
+name = "Type Check"
+command = "echo '🔎 Running type checker...' && sleep 1.5 && echo '✅ No type errors!'"
+triggers = ["manual"]
+max_concurrent = 1
+
+[keyboard]
+shortcuts = { Lint = "1", Format = "2", Test = "3", "Type Check" = "4" }
+enabled = true
+show_in_tooltips = true

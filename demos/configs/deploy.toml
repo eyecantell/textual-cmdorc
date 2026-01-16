@@ -1,0 +1,40 @@
+# Deploy workflow: Staging -> Production
+# Safe deployment with staging validation
+
+[variables]
+env = "staging"
+
+[[command]]
+name = "Pre-flight Check"
+command = "echo '✈️ Running pre-flight checks...' && sleep 1 && echo '  Checking credentials...' && echo '  Verifying targets...' && echo '✅ All systems go!'"
+triggers = ["manual"]
+max_concurrent = 1
+
+[[command]]
+name = "Deploy Staging"
+command = "echo '🚀 Deploying to staging...' && sleep 3 && echo '  Uploading artifacts...' && sleep 1 && echo '  Starting services...' && sleep 1 && echo '✅ Staging deployment complete!'"
+triggers = ["command_success:Pre-flight Check"]
+max_concurrent = 1
+
+[[command]]
+name = "Smoke Test"
+command = "echo '🔥 Running smoke tests...' && sleep 2 && echo '  Testing /health endpoint...' && echo '  Testing /api/v1 endpoint...' && echo '✅ Smoke tests passed!'"
+triggers = ["command_success:Deploy Staging"]
+max_concurrent = 1
+
+[[command]]
+name = "Deploy Production"
+command = "echo '🚀 Deploying to PRODUCTION...' && sleep 4 && echo '  Rolling out to 3 servers...' && sleep 2 && echo '  Server 1: ✅' && sleep 1 && echo '  Server 2: ✅' && sleep 1 && echo '  Server 3: ✅' && echo '🎉 Production deployment successful!'"
+triggers = ["command_success:Smoke Test"]
+max_concurrent = 1
+
+[[command]]
+name = "Rollback"
+command = "echo '⏪ Rolling back deployment...' && sleep 2 && echo '  Reverting to previous version...' && echo '✅ Rollback complete!'"
+triggers = ["manual"]
+max_concurrent = 1
+
+[keyboard]
+shortcuts = { "Pre-flight Check" = "p", "Deploy Staging" = "s", "Smoke Test" = "t", "Deploy Production" = "d", Rollback = "r" }
+enabled = true
+show_in_tooltips = true

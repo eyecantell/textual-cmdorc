@@ -1,0 +1,39 @@
+# Multi-config demo for textual-cmdorc
+# Switch between configs with Ctrl+K or the dropdown
+#
+# Run from demos/configs directory:
+#   pdm run cmdorc-tui
+#
+# Or specify config name:
+#   pdm run cmdorc-tui --config "Full Pipeline"
+
+# Development workflow - fast feedback loop
+# Includes file watcher for automatic lint on .py changes
+[[config]]
+name = "Development"
+files = ["./dev.toml", "./utils.toml"]
+
+# Full CI/CD pipeline - development + build + deploy
+[[config]]
+name = "Full Pipeline"
+files = ["./dev.toml", "./build.toml", "./deploy.toml"]
+
+# Build only - for creating release artifacts
+[[config]]
+name = "Build"
+files = ["./build.toml", "./utils.toml"]
+
+# Deploy only - for deployment operations
+[[config]]
+name = "Deploy"
+files = ["./deploy.toml", "./utils.toml"]
+
+# Quick check - just lint and format (no tests)
+[[config]]
+name = "Quick Check"
+files = ["./dev.toml"]
+
+# Utilities only - monitoring and debugging
+[[config]]
+name = "Utilities"
+files = ["./utils.toml"]
