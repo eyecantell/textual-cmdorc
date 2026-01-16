@@ -301,31 +301,34 @@ class TestCmdorcWidgetReload:
     """Test CmdorcWidget configuration reload functionality."""
 
     @pytest.mark.asyncio
-    async def test_reload_config_awaits_removal(self, mock_adapter, mock_config_path):
-        """Test that reload awaits file_list.remove()."""
+    async def test_reload_config_clears_items(self, mock_adapter, mock_config_path):
+        """Test that reload clears file_list items instead of removing container."""
         with patch("textual_cmdorc.cmdorc_app.OrchestratorAdapter", return_value=mock_adapter):
             widget = CmdorcWidget(config_path=str(mock_config_path))
 
-            # Create a mock file_list with async remove
+            # Create a mock file_list with clear_items
             mock_file_list = Mock()
-            mock_file_list.remove = AsyncMock()
+            mock_file_list.clear_items = Mock()
+            mock_file_list.add_item = Mock()
             widget.file_list = mock_file_list
 
-            # Mock other dependencies
+            # Mock query_one for container lookup
+            mock_container = Mock()
+            widget.query_one = Mock(return_value=mock_container)
+
+            # Mock other dependencies - ensure watcher count returns int
+            mock_adapter.get_watcher_count.return_value = 0
             widget.adapter = mock_adapter
-            widget.mount = AsyncMock()
             widget._bind_keyboard_shortcuts = Mock()
+            widget._wire_callbacks = Mock()
+            widget._populate_command_list = Mock()
             widget.tooltip_builder = Mock()
-            widget.tooltip_builder.build_status_tooltip_idle = Mock(return_value="Idle")
-            widget.tooltip_builder.build_play_tooltip = Mock(return_value="Play")
-            widget.tooltip_builder.build_stop_tooltip = Mock(return_value="Stop")
-            widget.tooltip_builder.build_output_tooltip = Mock(return_value="Output")
 
             # Call reload
             await widget.reload_config()
 
-            # Verify remove was awaited
-            mock_file_list.remove.assert_awaited_once()
+            # Verify clear_items was called (not remove)
+            mock_file_list.clear_items.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reload_config_detaches_old_adapter(self, mock_adapter, mock_config_path):
@@ -334,16 +337,21 @@ class TestCmdorcWidgetReload:
             widget = CmdorcWidget(config_path=str(mock_config_path))
 
             # Set up mocks
-            widget.file_list = Mock()
-            widget.file_list.remove = AsyncMock()
+            mock_file_list = Mock()
+            mock_file_list.clear_items = Mock()
+            widget.file_list = mock_file_list
+
+            # Mock query_one for container lookup
+            mock_container = Mock()
+            widget.query_one = Mock(return_value=mock_container)
+
+            # Mock other dependencies - ensure watcher count returns int
+            mock_adapter.get_watcher_count.return_value = 0
             widget.adapter = mock_adapter
-            widget.mount = AsyncMock()
             widget._bind_keyboard_shortcuts = Mock()
+            widget._wire_callbacks = Mock()
+            widget._populate_command_list = Mock()
             widget.tooltip_builder = Mock()
-            widget.tooltip_builder.build_status_tooltip_idle = Mock(return_value="Idle")
-            widget.tooltip_builder.build_play_tooltip = Mock(return_value="Play")
-            widget.tooltip_builder.build_stop_tooltip = Mock(return_value="Stop")
-            widget.tooltip_builder.build_output_tooltip = Mock(return_value="Output")
 
             # Call reload
             await widget.reload_config()

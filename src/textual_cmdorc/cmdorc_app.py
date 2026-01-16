@@ -244,10 +244,7 @@ class CmdorcWidget(Widget):
         """Compose widget layout."""
         try:
             # Create adapter (loads config, creates orchestrator)
-            if len(self.config_paths) == 1:
-                self.adapter = OrchestratorAdapter(config_path=self.config_paths[0])
-            else:
-                self.adapter = OrchestratorAdapter(config_paths=self.config_paths)
+            self.adapter = self._create_adapter()
 
             # Create tooltip builder
             self.tooltip_builder = TooltipBuilder(self.adapter)
@@ -381,51 +378,9 @@ class CmdorcWidget(Widget):
             loop = asyncio.get_running_loop()
             self.adapter.attach(loop)
 
-            # Populate the list (after it's mounted)
-            if self.file_list is not None:
-                cmd_names = self.adapter.get_command_names()
-
-                # Track current source file for separators (multi-config only)
-                current_source: Path | None = None
-                show_separators = len(self.config_paths) > 1
-
-                for cmd_name in cmd_names:
-                    # Add file separator if source changed (multi-config mode)
-                    if show_separators:
-                        cmd_source = self.adapter.get_command_source(cmd_name)
-                        if cmd_source and cmd_source != current_source:
-                            current_source = cmd_source
-                            # Generate unique ID from filename (sanitize for widget ID)
-                            sep_id = f"sep-{cmd_source.stem}".replace(" ", "-").replace(".", "-")
-                            separator = FileSeparator(cmd_source.name, id=sep_id)
-                            self.file_list.add_item(separator)
-                    # Create and add command link
-                    link = self._create_command_link(cmd_name)
-                    self.file_list.add_item(link)
-
-            # Wire lifecycle callbacks for all commands
-            for cmd_name in self.adapter.get_command_names():
-                # Started event (via orchestrator.on_event)
-                logger.debug(f"Wiring command_started:{cmd_name} callback")
-                self.adapter.orchestrator.on_event(
-                    f"command_started:{cmd_name}",
-                    lambda h, _ctx, name=cmd_name: self._on_command_started(name, h),
-                )
-                # Completion events (via adapter lifecycle callbacks)
-                self.adapter.on_command_success(
-                    cmd_name,
-                    lambda h, name=cmd_name: self._on_command_success(name, h),
-                )
-                self.adapter.on_command_failed(
-                    cmd_name,
-                    lambda h, name=cmd_name: self._on_command_failed(name, h),
-                )
-                self.adapter.on_command_cancelled(
-                    cmd_name,
-                    lambda h, name=cmd_name: self._on_command_cancelled(name, h),
-                )
-
-            # Bind global keyboard shortcuts
+            # Populate command list, wire callbacks, bind shortcuts
+            self._populate_command_list()
+            self._wire_callbacks()
             self._bind_keyboard_shortcuts()
 
             # Start polling for last triggered file (to update watcher status line)
@@ -458,6 +413,77 @@ class CmdorcWidget(Widget):
         except Exception:
             # Ignore context errors during app shutdown or transitions
             logger.debug("Context error during lifecycle callback registration (shutdown/transition)")
+
+    def _create_adapter(self) -> OrchestratorAdapter:
+        """Create OrchestratorAdapter from current config_paths.
+
+        Returns:
+            OrchestratorAdapter instance
+        """
+        if len(self.config_paths) == 1:
+            return OrchestratorAdapter(config_path=self.config_paths[0])
+        else:
+            return OrchestratorAdapter(config_paths=self.config_paths)
+
+    def _populate_command_list(self) -> None:
+        """Populate file_list with commands and separators.
+
+        Assumes:
+        - self.adapter is initialized
+        - self.file_list is created and mounted
+        """
+        if self.adapter is None or self.file_list is None:
+            return
+
+        cmd_names = self.adapter.get_command_names()
+
+        # Track current source file for separators (multi-config only)
+        current_source: Path | None = None
+        show_separators = len(self.config_paths) > 1
+
+        for cmd_name in cmd_names:
+            # Add file separator if source changed (multi-config mode)
+            if show_separators:
+                cmd_source = self.adapter.get_command_source(cmd_name)
+                if cmd_source and cmd_source != current_source:
+                    current_source = cmd_source
+                    # Generate unique ID from filename (sanitize for widget ID)
+                    sep_id = f"sep-{cmd_source.stem}".replace(" ", "-").replace(".", "-")
+                    separator = FileSeparator(cmd_source.name, id=sep_id)
+                    self.file_list.add_item(separator)
+            # Create and add command link
+            link = self._create_command_link(cmd_name)
+            self.file_list.add_item(link)
+
+    def _wire_callbacks(self) -> None:
+        """Wire lifecycle callbacks for all commands.
+
+        Assumes:
+        - self.adapter is initialized
+        """
+        if self.adapter is None:
+            return
+
+        for cmd_name in self.adapter.get_command_names():
+            # Started event (via orchestrator.on_event)
+            logger.debug(f"Wiring command_started:{cmd_name} callback")
+            self.adapter.orchestrator.on_event(
+                f"command_started:{cmd_name}",
+                lambda h, _ctx, name=cmd_name: self._on_command_started(name, h),
+            )
+            # Completion events (via adapter lifecycle callbacks)
+            self.adapter.on_command_success(
+                cmd_name,
+                lambda h, name=cmd_name: self._on_command_success(name, h),
+            )
+            self.adapter.on_command_failed(
+                cmd_name,
+                lambda h, name=cmd_name: self._on_command_failed(name, h),
+            )
+            self.adapter.on_command_cancelled(
+                cmd_name,
+                lambda h, name=cmd_name: self._on_command_cancelled(name, h),
+            )
 
     def _bind_keyboard_shortcuts(self) -> None:
         """Bind global keyboard shortcuts from config."""
@@ -804,7 +830,10 @@ class CmdorcWidget(Widget):
     # ========================================================================
 
     async def reload_config(self) -> None:
-        """Reload configuration from disk (rebuilds entire list).
+        """Reload configuration from disk.
+
+        Keeps container structure (VerticalScroll, FileLinkList) and only updates contents.
+        This prevents structural divergence between compose() and reload_config().
 
         Returns:
             tuple: (success: bool, message: str)
@@ -822,20 +851,11 @@ class CmdorcWidget(Widget):
             # Store old watcher count for comparison
             old_watcher_count = self.watcher_status.watcher_count if self.watcher_status else 0
 
-            # Remove old scroll container (which contains the file_list)
-            scroll_container = self.query_one("#commands-scroll", VerticalScroll)
-            await scroll_container.remove()
-
-            # Recreate adapter with new config (single or multi-config)
-            if len(self.config_paths) == 1:
-                self.adapter = OrchestratorAdapter(config_path=self.config_paths[0])
-            else:
-                self.adapter = OrchestratorAdapter(config_paths=self.config_paths)
-
-            # Recreate tooltip builder
+            # Create new adapter and tooltip builder
+            self.adapter = self._create_adapter()
             self.tooltip_builder = TooltipBuilder(self.adapter)
 
-            # Get new watcher count and update WatcherStatusLine if needed
+            # Handle WatcherStatusLine updates (add/remove/update as needed)
             new_watcher_count = self.adapter.get_watcher_count() if self.adapter else 0
             main_container = self.query_one("#main-container", Vertical)
 
@@ -847,7 +867,9 @@ class CmdorcWidget(Widget):
                     command_template=self.adapter.get_editor_command_template(),
                     watcher_configs=self.adapter.get_watcher_configs(),
                 )
-                await main_container.mount(self.watcher_status, before=0)  # Mount at top
+                # Mount before scroll container
+                scroll_container = self.query_one("#commands-scroll", VerticalScroll)
+                await main_container.mount(self.watcher_status, before=scroll_container)
             elif old_watcher_count > 0 and new_watcher_count == 0:
                 # Watchers were removed - remove WatcherStatusLine
                 if self.watcher_status:
@@ -858,63 +880,15 @@ class CmdorcWidget(Widget):
                 if self.watcher_status:
                     self.watcher_status.watcher_count = new_watcher_count
 
-            # Rebuild EMPTY command list
-            self.file_list = FileLinkList(
-                show_toggles=False,
-                show_remove=False,
-                id="commands-list",
-            )
+            # KEEP containers, just clear and repopulate contents
+            if self.file_list:
+                self.file_list.clear_items()
+            self._populate_command_list()
 
-            # Create new scroll container and mount it with the file_list
-            new_scroll = VerticalScroll(id="commands-scroll")
-            await main_container.mount(new_scroll)
-            await new_scroll.mount(self.file_list)
-
-            # Track current source file for separators (multi-config only)
-            current_source: Path | None = None
-            show_separators = len(self.config_paths) > 1
-
-            # THEN populate it (after mounting)
-            for cmd_name in self.adapter.get_command_names():
-                # Add file separator if source changed (multi-config mode)
-                if show_separators:
-                    cmd_source = self.adapter.get_command_source(cmd_name)
-                    if cmd_source and cmd_source != current_source:
-                        current_source = cmd_source
-                        # Generate unique ID from filename (sanitize for widget ID)
-                        sep_id = f"sep-{cmd_source.stem}".replace(" ", "-").replace(".", "-")
-                        separator = FileSeparator(cmd_source.name, id=sep_id)
-                        self.file_list.add_item(separator)
-                # Create and add command link
-                link = self._create_command_link(cmd_name)
-                self.file_list.add_item(link)
-
-            # Re-attach adapter
+            # Re-attach adapter and wire up
             loop = asyncio.get_running_loop()
             self.adapter.attach(loop)
-
-            # Re-wire callbacks
-            for cmd_name in self.adapter.get_command_names():
-                # Started event (via orchestrator.on_event)
-                self.adapter.orchestrator.on_event(
-                    f"command_started:{cmd_name}",
-                    lambda h, _ctx, name=cmd_name: self._on_command_started(name, h),
-                )
-                # Completion events (via adapter lifecycle callbacks)
-                self.adapter.on_command_success(
-                    cmd_name,
-                    lambda h, name=cmd_name: self._on_command_success(name, h),
-                )
-                self.adapter.on_command_failed(
-                    cmd_name,
-                    lambda h, name=cmd_name: self._on_command_failed(name, h),
-                )
-                self.adapter.on_command_cancelled(
-                    cmd_name,
-                    lambda h, name=cmd_name: self._on_command_cancelled(name, h),
-                )
-
-            # Re-bind keyboard shortcuts
+            self._wire_callbacks()
             self._bind_keyboard_shortcuts()
 
             logger.info("Configuration reloaded successfully")
