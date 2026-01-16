@@ -339,8 +339,7 @@ def main() -> None:
             # Create ConfigSet (works for both single and multiple files)
             # ConfigSwitcher will show as label for single, dropdown for multiple
             named_configs = [
-                NamedConfig(name=name, files=[path])
-                for name, path in zip(unique_names, config_paths)
+                NamedConfig(name=name, files=[path]) for name, path in zip(unique_names, config_paths, strict=True)
             ]
             config_set = ConfigSet(configs=named_configs)
 

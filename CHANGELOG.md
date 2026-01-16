@@ -14,13 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic naming from file stems with duplicate handling
   - Comprehensive error handling (missing files, wrong extensions, duplicates)
 
-### Added
-- Positional config file arguments (`cmdorc-tui dev.toml` or `cmdorc-tui dev.toml deploy.toml`)
-  - Single file shows config name as static label
-  - Multiple files create switchable configs with dropdown
-  - Automatic naming from file stems with duplicate handling
-  - Comprehensive error handling (missing files, wrong extensions, duplicates)
-
 ## [0.1.0] - 2026-01-12
 
 ### Added
