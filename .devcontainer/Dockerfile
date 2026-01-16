@@ -89,7 +89,7 @@ USER developer
 
 # Set up Python environment
 ENV PATH=/home/developer/.local/bin:$PATH
-WORKDIR /mounted/dev/textual-cmdorc
+WORKDIR /workspaces/textual-cmdorc
 
 # Install Python packages
 RUN python -m ensurepip --default-pip && \
@@ -106,7 +106,8 @@ RUN pip install --no-cache-dir \
     ruff \
     twine
 
-RUN git config --global --add safe.directory /mounted/dev/textual-cmdorc
+RUN git config --global --add safe.directory /workspaces/textual-cmdorc && \
+    git config --global --add safe.directory /mounted/dev/textual-cmdorc
 
 
 RUN echo "alias upc='sudo npm i -g @anthropic-ai/claude-code'" >> /home/developer/.bash_aliases

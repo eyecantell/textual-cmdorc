@@ -1,0 +1,54 @@
+# Auto-generated config.toml for cmdorc-tui
+
+[variables]
+base_dir = "."
+
+[[file_watcher]]
+dir = "."
+extensions = [".py"]
+recursive = true
+trigger_emitted = "py_file_changed"
+debounce_ms = 300
+ignore_dirs = ["__pycache__", ".git", "venv", ".venv"]
+
+[[command]]
+name = "Lint"
+command = "ruff check --fix ."
+triggers = ["py_file_changed"]
+max_concurrent = 1
+
+[[command]]
+name = "Format"
+command = "ruff format ."
+triggers = ["command_success:Lint"]
+max_concurrent = 1
+
+[[command]]
+name = "Tests"
+command = "pytest {{ base_dir }}"
+triggers = ["command_success:Format"]
+
+[output_storage]
+directory = ".cmdorc/outputs"
+keep_history = 10
+
+[editor]
+# Command template for opening files in your editor
+# Default: VSCode - "code --goto {{ path }}:{{ line }}:{{ column }}"
+#
+# Other popular options:
+# Vim: "vim {{ line_plus }} {{ path }}"
+# Sublime: "subl {{ path }}:{{ line }}:{{ column }}"
+# Nano: "nano {{ line_plus }} {{ path }}"
+#
+# Template variables:
+# - {{ path }} - Full file path
+# - {{ line }}, {{ column }} - Line/column numbers
+# - {{ line_plus }} - +42 format for vim-style editors
+# - {{ line_colon }} - :42 format
+command_template = "code --goto {{ path }}:{{ line }}:{{ column }}"
+
+[keyboard]
+shortcuts = { Lint = "1", Format = "2", Tests = "3" }
+enabled = true
+show_in_tooltips = true

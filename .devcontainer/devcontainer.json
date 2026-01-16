@@ -4,6 +4,13 @@
         "dockerfile": "Dockerfile",
         "context": ".."
     },
+
+    // Use a named Docker volume for the workspace (faster than Windows/WSL mount)
+    // To use: Command Palette → "Dev Containers: Clone Repository in Container Volume"
+    // Then enter your repository URL
+    "workspaceFolder": "/workspaces/textual-cmdorc",
+    "workspaceMount": "source=textual-cmdorc-workspace,target=/workspaces/textual-cmdorc,type=volume",
+
     "mounts": [
         {
             "type": "bind",
@@ -14,14 +21,9 @@
             "source": "${localEnv:HOME}${localEnv:USERPROFILE}/stuff_for_containers_home",
             "target": "/mounted/stuff_for_containers_home",
             "type": "bind"
-        },
-        {
-            "type": "bind",
-            "source": "${localWorkspaceFolder}/.claude-data",
-            "target": "/home/developer/.claude"
         }
     ],
-    "postCreateCommand": "cd /mounted/dev/textual-cmdorc && pdm install -G test -G dev",
+    "postCreateCommand": "mkdir -p /mounted/dev/.claude-textual-cmdorc && ln -sf /mounted/dev/.claude-textual-cmdorc ~/.claude && pdm install -G test -G dev",
     "customizations": {
         "vscode": {
             "extensions": [
