@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1]
 
+### Added
+- Scrollbar for large command lists (auto-appears when commands exceed viewport height)
+
 ### Fixed
 - Commands not displaying on startup due to `FileLinkList` evaluating to `False` when empty (now uses explicit `is None` checks)
 
