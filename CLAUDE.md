@@ -519,10 +519,9 @@ See **architecture.md** for full design rationale.
 
 - **architecture.md** - Authoritative design reference (simplified v0.2.0)
 - **README.md** - User-facing quickstart and feature overview
-- **EMBEDDING.md** - Embedding guide (may be outdated, refer to CmdorcApp docstring)
-- **implementation.md** - Phase-by-phase implementation guide (historical)
-- **plan.md** - Project roadmap (historical)
 - **CHANGELOG.md** - Version history and breaking changes
+- **vscode-extension-architecture.md** - Future reference for VS Code extension
+- **src/textual_cmdorc/tooltips.md** - Tooltip design specification
 
 ## When in Doubt
 
